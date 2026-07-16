@@ -113,6 +113,14 @@ function (self, unitId, unitFrame, envTable, modTable)
             s.pp = i / NUM
             s.zp = i * 1.2566   -- z-axis phase: 2π/5 spread so stars evenly rotate toward/away
 
+            -- dark shadow backing so the star pip pops against bright halos
+            local sh = s:CreateTexture(nil, "BACKGROUND")
+            sh:SetTexture(SPARK_TEX)
+            sh:SetSize(BLOCK * 1.1, BLOCK * 1.1)
+            sh:SetPoint("CENTER", s, "CENTER", 0, 0)
+            sh:SetVertexColor(0, 0, 0)
+            sh:SetAlpha(0.72)
+
             -- outer halo (star4, ADD, large glow ring)
             local ho = s:CreateTexture(nil, "BORDER")
             ho:SetTexture(SPARK_TEX)
@@ -129,12 +137,10 @@ function (self, unitId, unitFrame, envTable, modTable)
             hi:SetPoint("CENTER", s, "CENTER", 0, 0)
             hi:SetAlpha(0)
 
-            -- core star: star4 at 75% size so the 4 points show clearly
-            -- star4 is WHITE — SetVertexColor works correctly (multiplicative on white = true color)
-            -- The raid icon was YELLOW — multiplying by blue gave black, colors were broken
+            -- core star: full BLOCK size, clearly visible pip
             local co = s:CreateTexture(nil, "ARTWORK")
             co:SetTexture(SPARK_TEX)
-            co:SetSize(BLOCK * 0.75, BLOCK * 0.75)
+            co:SetSize(BLOCK, BLOCK)
             co:SetPoint("CENTER", s, "CENTER", 0, 0)
             co:SetVertexColor(0.25, 0.70, 1.0)
 
@@ -155,7 +161,7 @@ function (self, unitId, unitFrame, envTable, modTable)
             sp:SetVertexColor(1, 0.95, 0.8)
             sp:SetAlpha(0)
 
-            s.ho, s.hi, s.co, s.hot, s.sp = ho, hi, co, hot, sp
+            s.sh, s.ho, s.hi, s.co, s.hot, s.sp = sh, ho, hi, co, hot, sp
             s.spin = 0
             s.curScale = 1.0
             s.cR, s.cG, s.cB = 0.25, 0.70, 1.0
@@ -460,6 +466,10 @@ function (self, unitId, unitFrame, envTable, modTable)
                 b:SetPoint("CENTER", bar, "LEFT", STARTX + (i-1)*STEP + wobX, wobY)
 
                 b:SetScale(b.curScale)
+
+                -- dark shadow backing rotates with core so pip always pops
+                b.sh:SetRotation(-b.spin / PHI)
+                b.sh:SetAlpha(active and 0.72 or 0.40)
 
                 b.ho:SetVertexColor(self.gR, self.gG, self.gB)
                 b.ho:SetAlpha(b.hoA)
