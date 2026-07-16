@@ -110,6 +110,15 @@ function (self, unitId, unitFrame, envTable, modTable)
             s.pp = i / NUM
             s.zp = i * 1.2566   -- z-axis phase: 2π/5 spread so stars evenly rotate toward/away
 
+            -- black outline (drawn first, slightly oversized, no blend)
+            local ol = s:CreateTexture(nil, "BACKGROUND")
+            ol:SetTexture(STAR_TEX)
+            ol:SetTexCoord(0, 0.25, 0, 0.25)
+            ol:SetSize(BLOCK * 1.22, BLOCK * 1.22)
+            ol:SetPoint("CENTER", s, "CENTER", 0, 0)
+            ol:SetVertexColor(0, 0, 0)
+            ol:SetAlpha(0.85)
+
             -- subtle contrast shadow (fixed size, never resized)
             local bp = s:CreateTexture(nil, "BACKGROUND")
             bp:SetTexture(STAR_TEX)
@@ -164,7 +173,7 @@ function (self, unitId, unitFrame, envTable, modTable)
             sp:SetVertexColor(1, 0.95, 0.8)
             sp:SetAlpha(0)
 
-            s.bp, s.ho, s.hi, s.co, s.hot, s.sp = bp, ho, hi, co, hot, sp
+            s.ol, s.bp, s.ho, s.hi, s.co, s.hot, s.sp = ol, bp, ho, hi, co, hot, sp
             s.spin = 0
             s.curScale = 1.0
             s.cR, s.cG, s.cB = 1, 0.5, 0.1
