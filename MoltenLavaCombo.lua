@@ -3,7 +3,7 @@ function (self, unitId, unitFrame, envTable, modTable)
     --------------------------------------------------------------------
     -- Config
     --------------------------------------------------------------------
-    local VERSION   = "2.1.7"
+    local VERSION   = "2.1.8"
     local STAR_TEX  = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
     local SPARK_TEX = "Interface\\Cooldown\\star4"
     local SOLID     = "Interface\\Buttons\\WHITE8X8"
@@ -137,9 +137,10 @@ function (self, unitId, unitFrame, envTable, modTable)
             hi:SetPoint("CENTER", s, "CENTER", 0, 0)
             hi:SetAlpha(0)
 
-            -- core star: full BLOCK size, clearly visible pip
+            -- core star: raid icon atlas (proper 8-point star shape, normal blend so color shows)
             local co = s:CreateTexture(nil, "ARTWORK")
-            co:SetTexture(SPARK_TEX)
+            co:SetTexture(STAR_TEX)
+            co:SetTexCoord(0, 0.25, 0, 0.25)
             co:SetSize(BLOCK, BLOCK)
             co:SetPoint("CENTER", s, "CENTER", 0, 0)
             co:SetVertexColor(0.25, 0.70, 1.0)
