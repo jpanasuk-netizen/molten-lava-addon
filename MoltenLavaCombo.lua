@@ -3,17 +3,19 @@ function (self, unitId, unitFrame, envTable, modTable)
     --------------------------------------------------------------------
     -- Config
     --------------------------------------------------------------------
-    local VERSION   = "2.1.8"
+    local VERSION   = "2.1.9"
     local STAR_TEX  = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
     local SPARK_TEX = "Interface\\Cooldown\\star4"
     local SOLID     = "Interface\\Buttons\\WHITE8X8"
     local HOLY_POWER = Enum.PowerType.HolyPower
 
-    -- Tear down stale frame if version changed (new fields would be nil otherwise)
-    if _G.BigJ_StarBar_Final and _G.BigJ_StarBar_Final._ver ~= VERSION then
-        _G.BigJ_StarBar_Final:Hide()
-        _G.BigJ_StarBar_Final:SetScript("OnUpdate", nil)
-        _G.BigJ_StarBar_Final = nil
+    -- Tear down stale frame (always rebuild to ensure clean state)
+    if _G.BigJ_StarBar_Final then
+        pcall(function()
+            _G.BigJ_StarBar_Final:Hide()
+            _G.BigJ_StarBar_Final:SetScript("OnUpdate", nil)
+            _G.BigJ_StarBar_Final = nil
+        end)
     end
 
     local DEBUG    = false      -- print dawnlights/wings state while testing
