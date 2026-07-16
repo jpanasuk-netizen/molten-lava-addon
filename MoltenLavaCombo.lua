@@ -295,23 +295,26 @@ function (self, unitId, unitFrame, envTable, modTable)
             local haloA, glowA = 0.08, 0.18
             local spineA, auraA = 0.10, 0.03
             local sparkleOn = false
+            local wobAmp = 0   -- 4D wobble intensity, per mode
 
             if inAnshe and hasWings then
-                -- BOTH: maximum everything — blue plasma
+                -- BOTH: red + blue = magenta plasma — absolute maximum
                 mode = "both"
-                baseScale, spinSpeed = 1.22, 5.5
-                breatheFreq, breatheAmp, breatheOffset = 1.8, 0.20, 0.5
+                baseScale, spinSpeed = 1.28, 7.0
+                breatheFreq, breatheAmp, breatheOffset = 2.5, 0.28, 0.5
+                wobAmp = 10
                 local p = (sin(now * 9.0) + 1) / 2
-                coR, coG, coB = 0.30*(1-p)+0.60*p, 0.85*(1-p)+0.95*p, 1.0
-                gR, gG, gB = 0.4, 0.9, 1.0
-                haloA, glowA = 0.45, 0.72
-                spineA, auraA = 0.40, 0.16
+                coR, coG, coB = 1.0*(1-p)+0.40*p, 0.12*(1-p)+0.80*p, 0.90
+                gR, gG, gB = 0.9, 0.3, 1.0    -- magenta glow
+                haloA, glowA = 0.55, 0.82
+                spineA, auraA = 0.50, 0.22
                 sparkleOn = true
 
             elseif inAnshe then
                 mode = "anshe"
                 baseScale, spinSpeed = 1.10, 3.5
                 breatheFreq, breatheAmp = 0.85, 0.10
+                wobAmp = 4
                 local p = (sin(now * 7.5) + 1) / 2
                 coR, coG, coB = 0.20*(1-p)+0.50*p, 0.65*(1-p)+0.80*p, 1.0
                 gR, gG, gB = 0.35, 0.78, 1.0
@@ -320,14 +323,16 @@ function (self, unitId, unitFrame, envTable, modTable)
                 sparkleOn = true
 
             elseif hasWings then
+                -- WINGS (AW): red-crimson fire — aggressive, punchy
                 mode = "wings"
-                baseScale, spinSpeed = 1.14, 4.2
-                breatheFreq, breatheAmp = 1.1, 0.13
-                local p = (sin(now * 6.3) + 1) / 2
-                coR, coG, coB = 0.45*(1-p)+0.20*p, 0.72*(1-p)+0.55*p, 1.0
-                gR, gG, gB = 0.3, 0.75, 1.0
-                haloA, glowA = 0.30, 0.52
-                spineA, auraA = 0.30, 0.10
+                baseScale, spinSpeed = 1.16, 4.8
+                breatheFreq, breatheAmp = 1.4, 0.16
+                wobAmp = 6
+                local p = (sin(now * 8.0) + 1) / 2
+                coR, coG, coB = 1.0, 0.12*(1-p)+0.22*p, 0.30*(1-p)+0.08*p
+                gR, gG, gB = 0.95, 0.18, 0.30   -- red glow on halos/spine
+                haloA, glowA = 0.32, 0.55
+                spineA, auraA = 0.32, 0.12
                 sparkleOn = true
             else
                 baseScale = (power >= 5 and 1.08) or (power >= 3 and 1.04) or 1.0
@@ -421,8 +426,8 @@ function (self, unitId, unitFrame, envTable, modTable)
                 b.spin = b.spin + dt * tSpin
 
                 -- 4D axis wobble: XY oscillation at irrational (PHI-derived) frequencies
-                local wobX = sin(now * 1.3 + b.zp) * (active and 4 or 0)
-                local wobY = sin(now * (1.3 / PHI) + b.zp) * (active and 3 or 0)
+                local wobX = sin(now * 1.3 + b.zp) * (active and wobAmp or 0)
+                local wobY = sin(now * (1.3 / PHI) + b.zp) * (active and wobAmp * 0.75 or 0)
                 b:ClearAllPoints()
                 b:SetPoint("CENTER", bar, "LEFT", STARTX + (i-1)*STEP + wobX, wobY)
 
@@ -442,6 +447,7 @@ function (self, unitId, unitFrame, envTable, modTable)
                 b.co:SetAlpha(active and 1 or 0.85)
                 b.co:SetRotation(-b.spin / PHI)            -- 1/φ ≈ 0.618 (core gentle counter)
 
+                b.hot:SetVertexColor(b.cR, b.cG * 0.6, b.cB * 0.4)  -- hot core tinted toward core color
                 b.hot:SetAlpha(b.hotA)
                 b.hot:SetRotation(b.spin * PHI * 3)        -- 3φ ≈ 4.854 (vortex screams)
 
