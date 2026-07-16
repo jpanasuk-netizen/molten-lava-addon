@@ -127,11 +127,12 @@ function (self, unitId, unitFrame, envTable, modTable)
             hi:SetPoint("CENTER", s, "CENTER", 0, 0)
             hi:SetAlpha(0)
 
-            -- core star: raid icon atlas (proper 8-point star shape, normal blend so color shows)
+            -- core star: star4 at 75% size so the 4 points show clearly
+            -- star4 is WHITE — SetVertexColor works correctly (multiplicative on white = true color)
+            -- The raid icon was YELLOW — multiplying by blue gave black, colors were broken
             local co = s:CreateTexture(nil, "ARTWORK")
-            co:SetTexture(STAR_TEX)
-            co:SetTexCoord(0, 0.25, 0, 0.25)
-            co:SetSize(BLOCK, BLOCK)
+            co:SetTexture(SPARK_TEX)
+            co:SetSize(BLOCK * 0.75, BLOCK * 0.75)
             co:SetPoint("CENTER", s, "CENTER", 0, 0)
             co:SetVertexColor(0.25, 0.70, 1.0)
 
