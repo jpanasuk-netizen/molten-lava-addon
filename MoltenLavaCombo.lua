@@ -11,10 +11,14 @@ function (self, unitId, unitFrame, envTable, modTable)
     local DEBUG    = false      -- print dawnlights/wings state while testing
     local SOUND_ON = true       -- bell when you hit 5 Holy Power
 
-    -- Bell sound for hitting max Holy Power. Swap freely; missing keys just go silent.
-    local SND_FIVE = SOUNDKIT.UI_72_ARTIFACT_FORGE_TRAIT_EMBUE
-                  or SOUNDKIT.UI_EPICLOOT_TOAST
-                  or SOUNDKIT.IG_QUEST_LOG_OPEN
+    local SND_FIVE    = 567455   -- direct file ID, confirmed working (v1)
+    local SND_OVERCAP = 567458   -- adjacent bell variant for overcap warning
+
+    local function SafePlaySound(fileID)
+        if SOUND_ON and fileID then
+            PlaySoundFile(fileID, "SFX")
+        end
+    end
 
     local WAKE_OF_ASHES = 255937
     local SPENDERS = {
@@ -39,10 +43,6 @@ function (self, unitId, unitFrame, envTable, modTable)
         [383385] = true, -- Crusading Strikes (talent)
     }
 
-    -- Distinct sound for overcap warning (different from the hit-5 bell)
-    local SND_OVERCAP = SOUNDKIT.UI_72_ARTIFACT_FORGE_TRAIT_LOCKED
-                     or SOUNDKIT.IG_QUEST_LOG_OPEN
-
     -- hoisted math
     local sin, min, max = math.sin, math.min, math.max
 
@@ -55,12 +55,6 @@ function (self, unitId, unitFrame, envTable, modTable)
     local function HasWings()
         return (AuraUtil.FindAuraByName("Avenging Wrath", "player") ~= nil)
             or (AuraUtil.FindAuraByName("Crusade", "player") ~= nil)
-    end
-
-    local function SafePlaySound(kit)
-        if SOUND_ON and kit then
-            PlaySound(kit, "SFX", true)   -- true avoids overlapping duplicates
-        end
     end
 
     if not _G.BigJ_StarBar_Final then
@@ -114,6 +108,7 @@ function (self, unitId, unitFrame, envTable, modTable)
             s.o7 = i * 0.7
             s.o9 = i * 0.9
             s.pp = i / NUM
+            s.zp = i * 1.2566   -- z-axis phase: 2π/5 spread so stars evenly rotate toward/away
 
             -- dark contrast backplate
             local bp = s:CreateTexture(nil, "BACKGROUND")
@@ -290,51 +285,51 @@ function (self, unitId, unitFrame, envTable, modTable)
             -- Mode targets. Priority: both > WoA(anshe) > AW(wings) > normal
             ----------------------------------------------------------------
             local mode = "normal"
-            local baseScale, spinSpeed = 1.0, 2.5
-            -- throbFreq/throbAmp: pulse breathes proportional to mode intensity
-            local throbFreq = 1.5 + (power / 5) * 1.5   -- 1.5→3.0 Hz as power builds in normal
-            local throbAmp  = 0.04 + (power / 5) * 0.06
+            local baseScale, spinSpeed = 1.0, 1.0
+            -- zFreq/zAmp: z-axis depth wave — stars rotate toward/away proportional to mode
+            local zFreq = 0.55 + (power / 5) * 0.25   -- slow in normal, grows with power
+            local zAmp  = 0.10 + (power / 5) * 0.07
             local coR, coG, coB = 1, 0.5, 0.1
             local gR, gG, gB = 1, 0.6, 0.2
-            local haloA, glowA = 0.18, 0.45
-            local spineA, auraA = 0.22, 0.06
+            local haloA, glowA = 0.08, 0.18
+            local spineA, auraA = 0.10, 0.03
             local sparkleOn = false
 
             if inAnshe and hasWings then
                 mode = "both"
-                baseScale, spinSpeed = 1.78, 4.8
-                throbFreq, throbAmp = 5.0, 0.18
+                baseScale, spinSpeed = 1.78, 2.2
+                zFreq, zAmp = 1.1, 0.22
                 local p = (sin(now * 9.0) + 1) / 2
                 coR, coG, coB = 1, 0.97*(1-p)+0.80*p, 0.86*(1-p)+0.42*p
                 gR, gG, gB = 1, 0.96, 0.62
-                haloA, glowA = 0.48, 0.92
-                spineA, auraA = 0.55, 0.20
+                haloA, glowA = 0.20, 0.38
+                spineA, auraA = 0.22, 0.08
                 sparkleOn = true
 
             elseif inAnshe then
                 mode = "anshe"
-                baseScale, spinSpeed = 1.42, 3.0
-                throbFreq, throbAmp = 2.8, 0.10
+                baseScale, spinSpeed = 1.42, 1.4
+                zFreq, zAmp = 0.80, 0.17
                 local p = (sin(now * 7.5) + 1) / 2
                 coR, coG, coB = 1, 0.96*(1-p)+0.55*p, 0.86*(1-p)+0.06*p
                 gR, gG, gB = 1, 0.90, 0.50
-                haloA, glowA = 0.34, 0.74
-                spineA, auraA = 0.40, 0.12
+                haloA, glowA = 0.14, 0.28
+                spineA, auraA = 0.16, 0.05
                 sparkleOn = true
 
             elseif hasWings then
                 mode = "wings"
-                baseScale, spinSpeed = 1.54, 3.8
-                throbFreq, throbAmp = 3.5, 0.12
+                baseScale, spinSpeed = 1.54, 1.7
+                zFreq, zAmp = 0.92, 0.19
                 local p = (sin(now * 6.3) + 1) / 2
                 coR, coG, coB = 1, 0.55*(1-p)+0.30*p, 0.18*(1-p)+0.05*p
                 gR, gG, gB = 1, 0.62, 0.20
-                haloA, glowA = 0.40, 0.82
-                spineA, auraA = 0.48, 0.16
+                haloA, glowA = 0.16, 0.30
+                spineA, auraA = 0.18, 0.06
                 sparkleOn = true
             else
                 baseScale = (power >= 5 and 1.50) or (power >= 3 and 1.22) or 0.92
-                baseScale = baseScale + sin(t) * 0.05
+                baseScale = baseScale + sin(t) * 0.04
             end
 
             -- gain flash nudges core toward white + brightens hot center
@@ -368,16 +363,17 @@ function (self, unitId, unitFrame, envTable, modTable)
 
                 if mode == "normal" then
                     if active then
-                        tScale = baseScale + sin(t + b.o7) * 0.06 + sin(now * throbFreq + b.o9) * throbAmp
+                        -- z-axis wave: each star at different phase → barrel-roll toward/away illusion
+                        tScale = baseScale + sin(now * zFreq + b.zp) * zAmp
                         if power >= 5 then
                             tcoR, tcoG, tcoB = 1, 0.60, 0.16
-                            tHoA, tHiA = 0.22, 0.55
+                            tHoA, tHiA = 0.08, 0.20
                         else
                             tcoR, tcoG, tcoB = 0.72 + b.pp*0.28, 0.26 + b.pp*0.22, 0.05
-                            tHoA, tHiA = 0.16 + psh*0.06, 0.42
+                            tHoA, tHiA = 0.05 + psh*0.02, 0.14
                         end
-                        tHotA = 0.35 + psh*0.12
-                        tSpA = (power >= 5) and (0.12 + psh*0.10) or 0
+                        tHotA = 0.12 + psh*0.05
+                        tSpA = (power >= 5) and (0.05 + psh*0.04) or 0
                         tBpA = 0.5
                         tSpin = spinSpeed
                     else
@@ -389,12 +385,12 @@ function (self, unitId, unitFrame, envTable, modTable)
                     end
                 else
                     if active then
-                        tScale = baseScale + sin(t + b.o7) * 0.06 + sin(now * throbFreq + b.o9) * throbAmp
+                        tScale = baseScale + sin(now * zFreq + b.zp) * zAmp
                         tcoR, tcoG, tcoB = fR, fG, fB
-                        tHoA = haloA * (0.85 + psh*0.15)
-                        tHiA = glowA * (0.85 + psh*0.15)
-                        tHotA = 0.45 + psh*0.15 + hotBoost
-                        tSpA = sparkleOn and (0.18 + psh*0.14) or 0
+                        tHoA = haloA * (0.8 + psh*0.2)
+                        tHiA = glowA * (0.8 + psh*0.2)
+                        tHotA = 0.16 + psh*0.08 + hotBoost
+                        tSpA = sparkleOn and (0.06 + psh*0.06) or 0
                         tBpA = 0.5
                         tSpin = spinSpeed
                     else
@@ -427,25 +423,25 @@ function (self, unitId, unitFrame, envTable, modTable)
 
                 b:SetScale(b.curScale)
                 b.bp:SetAlpha(b.bpA)
-                b.bp:SetRotation(b.spin * 0.12)           -- barely moves (anchor layer)
+                b.bp:SetRotation(b.spin * 0.08)           -- barely moves (anchor)
 
                 b.ho:SetVertexColor(self.gR, self.gG, self.gB)
                 b.ho:SetAlpha(b.hoA)
-                b.ho:SetRotation(-b.spin * 1.4)           -- counter-spin, medium-fast
+                b.ho:SetRotation(-b.spin * 0.6)           -- slow counter
 
                 b.hi:SetVertexColor(self.gR, self.gG, self.gB)
                 b.hi:SetAlpha(b.hiA)
-                b.hi:SetRotation(b.spin * 1.8)            -- co-rotate, faster
+                b.hi:SetRotation(b.spin * 0.8)            -- slow co-rotate
 
                 b.co:SetVertexColor(b.cR, b.cG, b.cB)
                 b.co:SetAlpha(active and 1 or 0.85)
-                b.co:SetRotation(b.spin * 0.18)           -- core stays slow (readable glyph)
+                b.co:SetRotation(b.spin * 0.18)           -- core barely rotates (readable)
 
                 b.hot:SetAlpha(b.hotA)
-                b.hot:SetRotation(-b.spin * 3.2)          -- hot center flies counter (vortex pull)
+                b.hot:SetRotation(-b.spin * 1.4)          -- hot center counter (depth focal point)
 
                 b.sp:SetAlpha(b.spA)
-                b.sp:SetRotation(-b.spin * 1.8 + i * 0.5) -- sparkle counter-sweep
+                b.sp:SetRotation(-b.spin * 0.9 + i * 0.5)
             end
         end)
 
