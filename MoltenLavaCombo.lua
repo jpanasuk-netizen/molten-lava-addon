@@ -3,10 +3,18 @@ function (self, unitId, unitFrame, envTable, modTable)
     --------------------------------------------------------------------
     -- Config
     --------------------------------------------------------------------
+    local VERSION   = "2.1.6"
     local STAR_TEX  = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
-    local SPARK_TEX = "Interface\\Cooldown\\star4"          -- ornamental twinkle (blank if path changes)
+    local SPARK_TEX = "Interface\\Cooldown\\star4"
     local SOLID     = "Interface\\Buttons\\WHITE8X8"
     local HOLY_POWER = Enum.PowerType.HolyPower
+
+    -- Tear down stale frame if version changed (new fields would be nil otherwise)
+    if _G.BigJ_StarBar_Final and _G.BigJ_StarBar_Final._ver ~= VERSION then
+        _G.BigJ_StarBar_Final:Hide()
+        _G.BigJ_StarBar_Final:SetScript("OnUpdate", nil)
+        _G.BigJ_StarBar_Final = nil
+    end
 
     local DEBUG    = false      -- print dawnlights/wings state while testing
     local SOUND_ON = true       -- bell when you hit 5 Holy Power
@@ -492,6 +500,7 @@ function (self, unitId, unitFrame, envTable, modTable)
             end
         end)
 
+        bar._ver = VERSION
         _G.BigJ_StarBar_Final = bar
     end
 end
