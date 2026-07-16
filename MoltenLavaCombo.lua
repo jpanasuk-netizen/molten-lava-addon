@@ -47,9 +47,9 @@ function (self, unitId, unitFrame, envTable, modTable)
     local sin, min, max = math.sin, math.min, math.max
 
     local BLOCK = 40
-    local STEP  = 47
+    local STEP  = 62
     local NUM   = 5
-    local BAR_W = 250
+    local BAR_W = 340
     local STARTX = (BAR_W - (NUM - 1) * STEP) / 2
 
     local function HasWings()
@@ -110,14 +110,14 @@ function (self, unitId, unitFrame, envTable, modTable)
             s.pp = i / NUM
             s.zp = i * 1.2566   -- z-axis phase: 2π/5 spread so stars evenly rotate toward/away
 
-            -- dark contrast backplate
+            -- subtle contrast shadow (fixed size, never resized)
             local bp = s:CreateTexture(nil, "BACKGROUND")
             bp:SetTexture(STAR_TEX)
             bp:SetTexCoord(0, 0.25, 0, 0.25)
-            bp:SetSize(BLOCK * 1.45, BLOCK * 1.45)
+            bp:SetSize(BLOCK * 1.05, BLOCK * 1.05)
             bp:SetPoint("CENTER", s, "CENTER", 0, 0)
-            bp:SetVertexColor(0.05, 0.04, 0.03)
-            bp:SetAlpha(0.45)
+            bp:SetVertexColor(0.04, 0.03, 0.02)
+            bp:SetAlpha(0.22)
 
             -- outer halo
             local ho = s:CreateTexture(nil, "BORDER")
@@ -166,9 +166,9 @@ function (self, unitId, unitFrame, envTable, modTable)
 
             s.bp, s.ho, s.hi, s.co, s.hot, s.sp = bp, ho, hi, co, hot, sp
             s.spin = 0
-            s.zScale = 1.0   -- texture-based depth scale (no frame SetScale = no overlap)
+            s.curScale = 1.0
             s.cR, s.cG, s.cB = 1, 0.5, 0.1
-            s.hoA, s.hiA, s.hotA, s.spA, s.bpA = 0, 0, 0, 0, 0.45
+            s.hoA, s.hiA, s.hotA, s.spA, s.bpA = 0, 0, 0, 0, 0.22
 
             bar.blocks[i] = s
         end
@@ -285,10 +285,7 @@ function (self, unitId, unitFrame, envTable, modTable)
             -- Mode targets. Priority: both > WoA(anshe) > AW(wings) > normal
             ----------------------------------------------------------------
             local mode = "normal"
-            local baseScale, spinSpeed = 1.0, 1.8
-            -- zFreq/zAmp: texture-based depth wave (no frame overlap) — big amplitude = clear toward/away
-            local zFreq = 0.60 + (power / 5) * 0.30
-            local zAmp  = 0.32 + (power / 5) * 0.10   -- stars shrink to 0.58x / grow to 1.42x
+            local baseScale, spinSpeed = 1.0, 2.5
             local coR, coG, coB = 1, 0.5, 0.1
             local gR, gG, gB = 1, 0.6, 0.2
             local haloA, glowA = 0.08, 0.18
@@ -297,8 +294,7 @@ function (self, unitId, unitFrame, envTable, modTable)
 
             if inAnshe and hasWings then
                 mode = "both"
-                baseScale, spinSpeed = 1.30, 3.5
-                zFreq, zAmp = 1.1, 0.42
+                baseScale, spinSpeed = 1.18, 5.0
                 local p = (sin(now * 9.0) + 1) / 2
                 coR, coG, coB = 1, 0.97*(1-p)+0.80*p, 0.86*(1-p)+0.42*p
                 gR, gG, gB = 1, 0.96, 0.62
@@ -308,8 +304,7 @@ function (self, unitId, unitFrame, envTable, modTable)
 
             elseif inAnshe then
                 mode = "anshe"
-                baseScale, spinSpeed = 1.15, 2.4
-                zFreq, zAmp = 0.82, 0.38
+                baseScale, spinSpeed = 1.10, 3.5
                 local p = (sin(now * 7.5) + 1) / 2
                 coR, coG, coB = 1, 0.96*(1-p)+0.55*p, 0.86*(1-p)+0.06*p
                 gR, gG, gB = 1, 0.90, 0.50
@@ -319,8 +314,7 @@ function (self, unitId, unitFrame, envTable, modTable)
 
             elseif hasWings then
                 mode = "wings"
-                baseScale, spinSpeed = 1.20, 2.8
-                zFreq, zAmp = 0.95, 0.40
+                baseScale, spinSpeed = 1.14, 4.0
                 local p = (sin(now * 6.3) + 1) / 2
                 coR, coG, coB = 1, 0.55*(1-p)+0.30*p, 0.18*(1-p)+0.05*p
                 gR, gG, gB = 1, 0.62, 0.20
@@ -328,7 +322,8 @@ function (self, unitId, unitFrame, envTable, modTable)
                 spineA, auraA = 0.18, 0.06
                 sparkleOn = true
             else
-                baseScale = (power >= 5 and 1.10) or (power >= 3 and 1.05) or 1.0
+                baseScale = (power >= 5 and 1.08) or (power >= 3 and 1.04) or 1.0
+                baseScale = baseScale + sin(t) * 0.02
             end
 
             -- gain flash nudges core toward white + brightens hot center
@@ -356,13 +351,13 @@ function (self, unitId, unitFrame, envTable, modTable)
                 local active = i <= power
                 local psh = (sin(t + b.o9) + 1) / 2
 
-                local tZScale, tcoR, tcoG, tcoB
+                local tScale, tcoR, tcoG, tcoB
                 local tHoA, tHiA, tHotA, tSpA, tBpA
                 local tSpin
 
                 if mode == "normal" then
                     if active then
-                        tZScale = baseScale + sin(now * zFreq + b.zp) * zAmp
+                        tScale = baseScale + sin(t + b.o7) * 0.02
                         if power >= 5 then
                             tcoR, tcoG, tcoB = 1, 0.60, 0.16
                             tHoA, tHiA = 0.08, 0.20
@@ -372,42 +367,41 @@ function (self, unitId, unitFrame, envTable, modTable)
                         end
                         tHotA = 0.12 + psh*0.05
                         tSpA = (power >= 5) and (0.05 + psh*0.04) or 0
-                        tBpA = 0.5
+                        tBpA = 0.22
                         tSpin = spinSpeed
                     else
-                        tZScale = 0.72
+                        tScale = 0.88
                         tcoR, tcoG, tcoB = 0.16, 0.11, 0.07
-                        tHoA, tHiA, tHotA, tSpA = 0.03, 0.03, 0, 0
-                        tBpA = 0.32
+                        tHoA, tHiA, tHotA, tSpA = 0.02, 0.02, 0, 0
+                        tBpA = 0.14
                         tSpin = 0
                     end
                 else
                     if active then
-                        tZScale = baseScale + sin(now * zFreq + b.zp) * zAmp
+                        tScale = baseScale + sin(t + b.o7) * 0.02
                         tcoR, tcoG, tcoB = fR, fG, fB
                         tHoA = haloA * (0.8 + psh*0.2)
                         tHiA = glowA * (0.8 + psh*0.2)
                         tHotA = 0.16 + psh*0.08 + hotBoost
                         tSpA = sparkleOn and (0.06 + psh*0.06) or 0
-                        tBpA = 0.5
+                        tBpA = 0.22
                         tSpin = spinSpeed
                     else
-                        tZScale = baseScale * 0.65
+                        tScale = 0.82
                         tcoR, tcoG, tcoB = coR*0.20, coG*0.20, coB*0.20
-                        tHoA, tHiA = 0.04, 0.05
+                        tHoA, tHiA = 0.03, 0.04
                         tHotA, tSpA = 0, 0
-                        tBpA = 0.34
-                        tSpin = spinSpeed * 0.4
+                        tBpA = 0.14
+                        tSpin = spinSpeed * 0.35
                     end
                 end
 
                 if active and i == power and self.popImpulse > 0.05 then
-                    tZScale = tZScale + self.popImpulse * 0.20
+                    tScale = tScale + self.popImpulse * 0.18
                     tHotA = tHotA + self.popImpulse * 0.4
                 end
 
-                -- ease toward targets
-                b.zScale = b.zScale + (tZScale - b.zScale) * k
+                b.curScale = b.curScale + (tScale - b.curScale) * k
                 b.cR = b.cR + (tcoR - b.cR) * k
                 b.cG = b.cG + (tcoG - b.cG) * k
                 b.cB = b.cB + (tcoB - b.cB) * k
@@ -419,35 +413,28 @@ function (self, unitId, unitFrame, envTable, modTable)
 
                 b.spin = b.spin + dt * tSpin
 
-                -- Resize textures for depth (frame fixed at scale 1 = no frame overlap)
-                local sz = b.zScale
-                b.co:SetSize(BLOCK * sz,         BLOCK * sz)
-                b.hot:SetSize(BLOCK * 0.55 * sz, BLOCK * 0.55 * sz)
-                b.ho:SetSize(BLOCK * 1.95 * sz,  BLOCK * 1.95 * sz)
-                b.hi:SetSize(BLOCK * 1.30 * sz,  BLOCK * 1.30 * sz)
-                b.bp:SetSize(BLOCK * 1.45 * sz,  BLOCK * 1.45 * sz)
-                b.sp:SetSize(BLOCK * 1.25 * sz,  BLOCK * 1.25 * sz)
+                b:SetScale(b.curScale)
 
                 b.bp:SetAlpha(b.bpA)
-                b.bp:SetRotation(b.spin * 0.08)
+                -- backplate fixed size, barely rotates
 
                 b.ho:SetVertexColor(self.gR, self.gG, self.gB)
                 b.ho:SetAlpha(b.hoA)
-                b.ho:SetRotation(-b.spin * 1.0)
+                b.ho:SetRotation(-b.spin * 1.2)    -- outer counter-spin
 
                 b.hi:SetVertexColor(self.gR, self.gG, self.gB)
                 b.hi:SetAlpha(b.hiA)
-                b.hi:SetRotation(b.spin * 1.2)
+                b.hi:SetRotation(b.spin * 1.8)     -- inner co-spin faster
 
                 b.co:SetVertexColor(b.cR, b.cG, b.cB)
                 b.co:SetAlpha(active and 1 or 0.85)
-                b.co:SetRotation(b.spin * 0.22)
+                b.co:SetRotation(-b.spin * 0.12)   -- core barely moves (readable)
 
                 b.hot:SetAlpha(b.hotA)
-                b.hot:SetRotation(-b.spin * 2.0)
+                b.hot:SetRotation(b.spin * 3.5)    -- hot center screams inward (vortex focal point)
 
                 b.sp:SetAlpha(b.spA)
-                b.sp:SetRotation(-b.spin * 0.9 + i * 0.5)
+                b.sp:SetRotation(-b.spin * 1.5 + i * 0.5)
             end
         end)
 
