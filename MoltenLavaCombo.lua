@@ -1,36 +1,25 @@
 function (self, unitId, unitFrame, envTable, modTable)
+    print("[StarBar VERSION] running build 12 -- fixed permanent-hide bug, dawnlights timeout, toned down + distinct wings color")
 
     --------------------------------------------------------------------
     -- Config
     --------------------------------------------------------------------
-    local VERSION   = "2.1.9"
     local STAR_TEX  = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
-    local SPARK_TEX = "Interface\\Cooldown\\star4"
+    local SPARK_TEX = "Interface\\Cooldown\\star4"          -- ornamental twinkle (blank if path changes)
     local SOLID     = "Interface\\Buttons\\WHITE8X8"
     local HOLY_POWER = Enum.PowerType.HolyPower
-
-    -- Tear down stale frame (always rebuild to ensure clean state)
-    if _G.BigJ_StarBar_Final then
-        pcall(function()
-            _G.BigJ_StarBar_Final:Hide()
-            _G.BigJ_StarBar_Final:SetScript("OnUpdate", nil)
-            _G.BigJ_StarBar_Final = nil
-        end)
-    end
 
     local DEBUG    = false      -- print dawnlights/wings state while testing
     local SOUND_ON = true       -- bell when you hit 5 Holy Power
 
-    local SND_FIVE    = 567455   -- direct file ID, confirmed working (v1)
-    local SND_OVERCAP = 567458   -- adjacent bell variant for overcap warning
-
-    local function SafePlaySound(fileID)
-        if SOUND_ON and fileID then
-            PlaySoundFile(fileID, "SFX")
-        end
-    end
+    -- Bell sound for hitting max Holy Power. Swap freely; missing keys just go silent.
+    local SND_FIVE = SOUNDKIT.UI_72_ARTIFACT_FORGE_TRAIT_EMBUE
+                  or SOUNDKIT.UI_EPICLOOT_TOAST
+                  or SOUNDKIT.IG_QUEST_LOG_OPEN
 
     local WAKE_OF_ASHES = 255937
+    local AVENGING_WRATH_DURATION = 20   -- base seconds; bump this up if you have talents that extend Wings
+    local DAWNLIGHTS_WINDOW = 12          -- seconds you have to spend all 3 dawnlight stacks before it reverts to normal
     local SPENDERS = {
         [85256]  = true, -- Templar's Verdict
         [336872] = true, -- Final Verdict
@@ -41,33 +30,32 @@ function (self, unitId, unitFrame, envTable, modTable)
         [85673]  = true, -- Word of Glory
     }
 
-    local GENERATORS = {
-        [35395]  = true, -- Crusader Strike
-        [406647] = true, -- Crusading Strikes
-        [406648] = true, -- Crusading Strikes (alt)
-        [184575] = true, -- Blade of Justice
-        [20271]  = true, -- Judgment
-        [24275]  = true, -- Hammer of Wrath
-        [255937] = true, -- Wake of Ashes
-        [304971] = true, -- Divine Toll
-        [383385] = true, -- Crusading Strikes (talent)
-    }
-
     -- hoisted math
     local sin, min, max = math.sin, math.min, math.max
-    local PHI = 1.6180339887   -- golden ratio: irrational spin ratios = aperiodic "4D" rotation
 
-    local BLOCK = 46
-    local STEP  = 62
+    local BLOCK = 40
+    local STEP  = 47
     local NUM   = 5
-    local BAR_W = 340
+    local BAR_W = 250
     local STARTX = (BAR_W - (NUM - 1) * STEP) / 2
 
-    local function HasWings()
-        -- UnitBuff is reliable in TWW; AuraUtil.FindAuraByName silently fails
-        return UnitBuff("player", "Avenging Wrath") ~= nil
-            or UnitBuff("player", "Crusade") ~= nil
-            or UnitBuff("player", "Avenging Crusader") ~= nil
+    -- Avenging Wrath detection: tracked off the CAST event + a fixed duration
+    -- timer, exactly like Wake of Ashes' dawnlights below -- NOT via the aura
+    -- API. The aura-existence check (C_UnitAuras.GetPlayerAuraBySpellID) never
+    -- reliably flipped true in-game even though it never crashed, so it's been
+    -- dropped entirely in favor of this proven cast+timer approach.
+    local AVENGING_WRATH_ID = 31884
+    local CRUSADE_ID = 231895   -- Retribution's version of Wings; same duration logic
+
+    -- NOTE: no pcall/xpcall anywhere in this script -- Plater's sandbox for
+    -- this hook does not expose pcall/xpcall as callable globals at all
+    -- (confirmed repeatedly: every pcall/xpcall call site has thrown
+    -- "attempt to call a nil value" pointing right at that call).
+
+    local function SafePlaySound(kit)
+        if SOUND_ON and kit then
+            PlaySound(kit, "SFX", true)   -- true avoids overlapping duplicates
+        end
     end
 
     if not _G.BigJ_StarBar_Final then
@@ -77,18 +65,25 @@ function (self, unitId, unitFrame, envTable, modTable)
         bar:SetFrameLevel(100)
         bar.blocks = {}
         bar.dawnlightsLeft = 0
+        bar.dawnlightsExpire = 0
+        bar.wingsUntil = 0
         bar.lastPower = -1
         bar.popImpulse = 0
         bar.lastUpdate = 0
         bar.lastDecrement = 0
         bar.flash = 0
-        bar.hasWings = HasWings()
-        bar.currentTarget = nil        -- track target to prevent re-anchor jitter
-        bar.lastGenTime = {}           -- per-spellID timestamps for overcap double-fire guard
-        bar.wasAtFive = false          -- true when player was at 5 HP last frame (overcap detection)
         -- bar-level smoothed glow color (shared by halos, spine, aura)
-        bar.gR, bar.gG, bar.gB = 0.3, 0.7, 1.0
+        bar.gR, bar.gG, bar.gB = 1, 0.6, 0.2
         bar.auraA = 0.10
+
+        -- IMPORTANT: never call bar:Hide() anywhere. A frame's OnUpdate script
+        -- stops firing entirely while the frame is hidden, so if OnUpdate ever
+        -- hides the frame itself, it can never run again to show itself back --
+        -- that's what was causing the bar to "detach"/disappear permanently.
+        -- We keep the frame always :Show()'n and use SetAlpha(0/1) to fade
+        -- visibility instead, so OnUpdate always keeps ticking.
+        bar:Show()
+        bar:SetAlpha(0)
 
         --------------------------------------------------------------------
         -- Backdrop: luminous spine + soft full-bar aura
@@ -113,7 +108,7 @@ function (self, unitId, unitFrame, envTable, modTable)
         --------------------------------------------------------------------
         for i = 1, NUM do
             local s = CreateFrame("Frame", nil, bar)
-            s:SetFrameLevel(bar:GetFrameLevel() + 2 + i)   -- unique level per star, no overlap z-fighting
+            s:SetFrameLevel(bar:GetFrameLevel() + 2)
             s:SetSize(BLOCK, BLOCK)
             s:SetPoint("CENTER", bar, "LEFT", STARTX + (i - 1) * STEP, 0)
 
@@ -121,105 +116,90 @@ function (self, unitId, unitFrame, envTable, modTable)
             s.o7 = i * 0.7
             s.o9 = i * 0.9
             s.pp = i / NUM
-            s.zp = i * 1.2566   -- z-axis phase: 2π/5 spread so stars evenly rotate toward/away
 
-            -- outer halo (star4, ADD, large glow ring)
+            -- dark contrast backplate
+            local bp = s:CreateTexture(nil, "BACKGROUND")
+            bp:SetTexture(STAR_TEX)
+            bp:SetTexCoord(0, 0.25, 0, 0.25)
+            bp:SetSize(BLOCK * 1.45, BLOCK * 1.45)
+            bp:SetPoint("CENTER", s, "CENTER", 0, 0)
+            bp:SetVertexColor(0.05, 0.04, 0.03)
+            bp:SetAlpha(0.45)
+
+            -- outer halo
             local ho = s:CreateTexture(nil, "BORDER")
-            ho:SetTexture(SPARK_TEX)
+            ho:SetTexture(STAR_TEX)
+            ho:SetTexCoord(0, 0.25, 0, 0.25)
             ho:SetBlendMode("ADD")
-            ho:SetSize(BLOCK * 2.2, BLOCK * 2.2)
+            ho:SetSize(BLOCK * 1.95, BLOCK * 1.95)
             ho:SetPoint("CENTER", s, "CENTER", 0, 0)
             ho:SetAlpha(0)
 
-            -- inner halo (star4, ADD)
+            -- inner halo
             local hi = s:CreateTexture(nil, "ARTWORK")
-            hi:SetTexture(SPARK_TEX)
+            hi:SetTexture(STAR_TEX)
+            hi:SetTexCoord(0, 0.25, 0, 0.25)
             hi:SetBlendMode("ADD")
-            hi:SetSize(BLOCK * 1.45, BLOCK * 1.45)
+            hi:SetSize(BLOCK * 1.3, BLOCK * 1.3)
             hi:SetPoint("CENTER", s, "CENTER", 0, 0)
             hi:SetAlpha(0)
 
-            -- core star: raid icon atlas (proper 8-point star shape, normal blend so color shows)
+            -- core star (readable glyph)
             local co = s:CreateTexture(nil, "ARTWORK")
             co:SetTexture(STAR_TEX)
             co:SetTexCoord(0, 0.25, 0, 0.25)
             co:SetSize(BLOCK, BLOCK)
             co:SetPoint("CENTER", s, "CENTER", 0, 0)
-            co:SetVertexColor(0.25, 0.70, 1.0)
+            co:SetVertexColor(1, 0.5, 0.1)
 
-            -- hot inner core (star4 small = glowing dot, ADD so color adds over star)
+            -- hot inner core
             local hot = s:CreateTexture(nil, "OVERLAY")
-            hot:SetTexture(SPARK_TEX)
+            hot:SetTexture(STAR_TEX)
+            hot:SetTexCoord(0, 0.25, 0, 0.25)
             hot:SetBlendMode("ADD")
-            hot:SetSize(BLOCK * 0.65, BLOCK * 0.65)
+            hot:SetSize(BLOCK * 0.55, BLOCK * 0.55)
             hot:SetPoint("CENTER", s, "CENTER", 0, 0)
+            hot:SetVertexColor(1, 0.95, 0.65)
             hot:SetAlpha(0)
 
             -- sparkle twinkle
             local sp = s:CreateTexture(nil, "OVERLAY")
             sp:SetTexture(SPARK_TEX)
             sp:SetBlendMode("ADD")
-            sp:SetSize(BLOCK * 1.5, BLOCK * 1.5)
+            sp:SetSize(BLOCK * 1.25, BLOCK * 1.25)
             sp:SetPoint("CENTER", s, "CENTER", 0, 0)
             sp:SetVertexColor(1, 0.95, 0.8)
             sp:SetAlpha(0)
 
-            s.ho, s.hi, s.co, s.hot, s.sp = ho, hi, co, hot, sp
+            s.bp, s.ho, s.hi, s.co, s.hot, s.sp = bp, ho, hi, co, hot, sp
             s.spin = 0
-            s.curScale = 1.0
-            s.cR, s.cG, s.cB = 0.25, 0.70, 1.0
-            s.hoA, s.hiA, s.hotA, s.spA = 0, 0, 0, 0
+            s.curScale = 1
+            s.cR, s.cG, s.cB = 1, 0.5, 0.1
+            s.hoA, s.hiA, s.hotA, s.spA, s.bpA = 0, 0, 0, 0, 0.45
 
             bar.blocks[i] = s
         end
 
         --------------------------------------------------------------------
-        -- Events: WoA arms dawnlights, spenders consume, UNIT_AURA tracks wings
+        -- Events: WoA arms dawnlights, spenders consume, AW/Crusade cast arms wings
         --------------------------------------------------------------------
         local ef = CreateFrame("Frame")
         ef:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
-        ef:RegisterEvent("UNIT_AURA")
-        ef:RegisterEvent("PLAYER_TARGET_CHANGED")
         ef:SetScript("OnEvent", function(_, event, unit, _, spellID)
-            if event == "PLAYER_TARGET_CHANGED" then
-                -- Re-anchor immediately on target change (not waiting for OnUpdate tick)
-                bar.currentTarget = nil
-                local plate = C_NamePlate.GetNamePlateForUnit("target")
-                if plate then
-                    bar:ClearAllPoints()
-                    bar:SetPoint("BOTTOM", plate, "TOP", 0, 18)
-                    bar:Show()
-                else
-                    bar:Hide()
-                end
-                return
-            end
-            if event == "UNIT_AURA" then
-                if unit == "player" then
-                    bar.hasWings = HasWings()
-                end
-                return
-            end
             if unit ~= "player" then return end
             local now = GetTime()
-            if spellID == WAKE_OF_ASHES then
+            if spellID == AVENGING_WRATH_ID or spellID == CRUSADE_ID then
+                bar.wingsUntil = now + AVENGING_WRATH_DURATION
+                if DEBUG then print("[StarBar] wings armed for", AVENGING_WRATH_DURATION, "sec") end
+            elseif spellID == WAKE_OF_ASHES then
                 bar.dawnlightsLeft = 3
                 bar.lastDecrement = now
+                bar.dawnlightsExpire = now + DAWNLIGHTS_WINDOW
             elseif SPENDERS[spellID] then
                 if bar.dawnlightsLeft > 0 and (now - bar.lastDecrement) > 0.5 then
                     bar.dawnlightsLeft = bar.dawnlightsLeft - 1
                     bar.lastDecrement = now
                     if DEBUG then print("[StarBar] spender", spellID, "-> dawnlights", bar.dawnlightsLeft) end
-                end
-            end
-            -- Overcap: generator fired while already at 5 HP (wasted charge)
-            if GENERATORS[spellID] then
-                local last = bar.lastGenTime[spellID] or 0
-                if (now - last) >= 0.4 then
-                    bar.lastGenTime[spellID] = now
-                    if bar.wasAtFive then
-                        SafePlaySound(SND_OVERCAP)
-                    end
                 end
             end
         end)
@@ -233,21 +213,13 @@ function (self, unitId, unitFrame, envTable, modTable)
             local dt = self.lastUpdate
             self.lastUpdate = 0
 
-            -- Update overcap tracker before any early returns (event handler reads this)
-            self.wasAtFive = (UnitPower("player", HOLY_POWER) or 0) >= 5
-
             local plate = C_NamePlate.GetNamePlateForUnit("target")
             if plate then
-                local currentUnit = plate:GetUnit()
-                if currentUnit ~= self.currentTarget then
-                    self.currentTarget = currentUnit
-                    self:ClearAllPoints()
-                    self:SetPoint("BOTTOM", plate, "TOP", 0, 18)
-                end
-                self:Show()
+                self:ClearAllPoints()
+                self:SetPoint("BOTTOM", plate, "TOP", 0, 18)
+                self:SetAlpha(1)   -- fade in, never Hide() -- see note above
             else
-                self:Hide()
-                self.currentTarget = nil
+                self:SetAlpha(0)   -- fade out, but stay :Show()'n so OnUpdate keeps running
                 self.lastPower = -1        -- avoid a fake ding on next target
                 return
             end
@@ -255,7 +227,14 @@ function (self, unitId, unitFrame, envTable, modTable)
             local power = UnitPower("player", HOLY_POWER) or 0
             local now = GetTime()
 
-            local hasWings = self.hasWings
+            local hasWings = self.wingsUntil and (now < self.wingsUntil)
+
+            -- If dawnlight stacks aren't all spent within the window, snap back
+            -- to normal instead of staying lit forever.
+            if self.dawnlightsLeft > 0 and self.dawnlightsExpire and now > self.dawnlightsExpire then
+                self.dawnlightsLeft = 0
+                if DEBUG then print("[StarBar] dawnlights window expired, reverting to normal") end
+            end
 
             -- Power-drop spender detection (ID-agnostic fallback)
             if power < self.lastPower and (self.lastPower - power) >= 3 then
@@ -280,10 +259,10 @@ function (self, unitId, unitFrame, envTable, modTable)
 
             -- Gain / spend pop
             if power > self.lastPower then
-                self.popImpulse = 0.34
-                self.flash = 1
+                self.popImpulse = 0.26
+                self.flash = 0.8
             elseif power < self.lastPower then
-                self.popImpulse = -0.22
+                self.popImpulse = -0.16
             end
             self.lastPower = power
 
@@ -299,81 +278,50 @@ function (self, unitId, unitFrame, envTable, modTable)
             -- Mode targets. Priority: both > WoA(anshe) > AW(wings) > normal
             ----------------------------------------------------------------
             local mode = "normal"
-            local baseScale, spinSpeed = 1.0, 3.2
-            local breatheAmp = 0.09
-            local breatheOffset = 0
-            local coR, coG, coB = 0.25, 0.70, 1.0
-            local hotR, hotG, hotB = 0.5, 0.8, 1.0   -- hot center color, per mode
-            local gR, gG, gB = 0.3, 0.7, 1.0
-            local haloA, glowA = 0.12, 0.24
-            local spineA, auraA = 0.14, 0.05
+            local baseScale, spinSpeed = 1.0, 3.0
+            local coR, coG, coB = 1, 0.5, 0.1     -- core color target (mode-level default)
+            local gR, gG, gB = 1, 0.6, 0.2        -- glow color target (bar-level)
+            local haloA, glowA = 0.18, 0.45       -- base alphas for active stars
+            local spineA, auraA = 0.22, 0.06
             local sparkleOn = false
-            local wobAmp = 0
-            local breatheVal = sin(now * 0.75)  -- default smooth, overridden per mode
 
             if inAnshe and hasWings then
-                ----------------------------------------
-                -- BOTH: Holy Ghost — absolute maximum
-                ----------------------------------------
+                -- BOTH: the most intense state, but toned down from before
                 mode = "both"
-                baseScale, spinSpeed = 1.36, 11.0
-                breatheAmp, breatheOffset = 0.40, 0.75
-                wobAmp = 18
-                -- color: 14Hz red<->blue cycling with white-hot peaks
-                local p  = (sin(now * 14.0) + 1) / 2
-                local wh = max(0, sin(now * 7.0))   -- white-hot flash every half-cycle
-                coR = 1.0*(1-p) + 0.20*p + wh*0.4
-                coG = 0.05*(1-p) + 0.80*p + wh*0.6
-                coB = 0.80*(1-p) + 1.0*p  + wh*0.4
-                hotR, hotG, hotB = coR, coG*0.5, coB*0.3
-                gR, gG, gB = 1.0, 0.5, 1.0   -- holy white-magenta corona
-                haloA, glowA = 0.78, 1.0
-                spineA, auraA = 0.70, 0.35
+                baseScale, spinSpeed = 1.42, 4.2
+                local p = (sin(now * 9.0) + 1) / 2
+                coR, coG, coB = 1, 0.97*(1-p)+0.80*p, 0.86*(1-p)+0.42*p
+                gR, gG, gB = 1, 0.96, 0.62
+                haloA, glowA = 0.38, 0.74
+                spineA, auraA = 0.44, 0.16
                 sparkleOn = true
-                -- per-star ripple computed in loop (breatheVal unused here)
 
             elseif inAnshe then
-                ----------------------------------------
-                -- WoA: Divine Empowerment — slow massive surges
-                ----------------------------------------
+                -- WoA alone: clean bright-yellow rotating throb (unchanged hue, toned down)
                 mode = "anshe"
-                baseScale, spinSpeed = 1.18, 4.8
-                breatheAmp = 0.26   -- huge amplitude — stars visibly SWELL
-                wobAmp = 9
-                -- pure electric blue, vivid
-                local p = (sin(now * 5.5) + 1) / 2
-                coR, coG, coB = 0.05 + p*0.15, 0.60 + p*0.30, 1.0
-                hotR, hotG, hotB = 0.4, 0.95, 1.0
-                gR, gG, gB = 0.20, 0.70, 1.0
-                haloA, glowA = 0.38, 0.58
-                spineA, auraA = 0.35, 0.14
+                baseScale, spinSpeed = 1.14, 2.9
+                local p = (sin(now * 7.5) + 1) / 2
+                coR, coG, coB = 1, 0.96*(1-p)+0.55*p, 0.86*(1-p)+0.06*p
+                gR, gG, gB = 1, 0.90, 0.50
+                haloA, glowA = 0.27, 0.59
+                spineA, auraA = 0.32, 0.10
                 sparkleOn = true
-                -- slow majestic surge (0.40 Hz = 2.5 second period)
-                breatheVal = sin(now * 0.40)
 
             elseif hasWings then
-                ----------------------------------------
-                -- AW: Righteous Fury — punchy cubic wrath jabs
-                ----------------------------------------
+                -- AW alone: "holy molten glow" -- deliberately white-gold and hot,
+                -- NOT the same orange as normal-mode-at-5-power, so it reads as a
+                -- clearly distinct effect instead of blending into normal.
                 mode = "wings"
-                baseScale, spinSpeed = 1.22, 6.5
-                breatheAmp = 0.24   -- punchy amplitude
-                wobAmp = 10
-                -- blood red, barely any blue
-                local p = (sin(now * 11.0) + 1) / 2
-                coR, coG, coB = 1.0, 0.08 + p*0.12, 0.10 + p*0.08
-                hotR, hotG, hotB = 1.0, 0.25, 0.10
-                gR, gG, gB = 1.0, 0.15, 0.20   -- crimson corona
-                haloA, glowA = 0.50, 0.75
-                spineA, auraA = 0.48, 0.20
+                baseScale, spinSpeed = 1.28, 3.3
+                local p = (sin(now * 6.3) + 1) / 2
+                coR, coG, coB = 1, 0.85*(1-p)+0.95*p, 0.55*(1-p)+0.72*p
+                gR, gG, gB = 1, 0.88, 0.60
+                haloA, glowA = 0.30, 0.58
+                spineA, auraA = 0.36, 0.12
                 sparkleOn = true
-                -- CUBIC breathing: hangs near zero then SNAPS to peak = punchy wrath
-                local raw = sin(now * 2.2)
-                breatheVal = raw * raw * raw   -- x³ keeps sign, sharpens peaks
-
             else
-                baseScale = (power >= 5 and 1.10) or (power >= 3 and 1.05) or 1.0
-                breatheVal = sin(now * 0.75)
+                baseScale = (power >= 5 and 1.40) or (power >= 3 and 1.16) or 0.90
+                baseScale = baseScale + sin(t) * 0.04
             end
 
             -- gain flash nudges core toward white + brightens hot center
@@ -381,7 +329,7 @@ function (self, unitId, unitFrame, envTable, modTable)
             local fR = coR*(1-flashMix) + 1*flashMix
             local fG = coG*(1-flashMix) + 0.97*flashMix
             local fB = coB*(1-flashMix) + 0.85*flashMix
-            local hotBoost = self.flash * 0.7
+            local hotBoost = self.flash * 0.5
 
             -- smooth bar-level glow color (halos + spine + aura share it)
             self.gR = self.gR + (gR - self.gR) * k
@@ -402,55 +350,56 @@ function (self, unitId, unitFrame, envTable, modTable)
                 local psh = (sin(t + b.o9) + 1) / 2
 
                 local tScale, tcoR, tcoG, tcoB
-                local tHoA, tHiA, tHotA, tSpA
+                local tHoA, tHiA, tHotA, tSpA, tBpA
                 local tSpin
 
                 if mode == "normal" then
                     if active then
-                        tScale = baseScale + breatheVal * breatheAmp
+                        tScale = baseScale + sin(t + b.o7) * 0.05
                         if power >= 5 then
-                            tcoR, tcoG, tcoB = 0.45, 0.88, 1.0
-                            tHoA, tHiA = 0.14, 0.28
+                            tcoR, tcoG, tcoB = 1, 0.60, 0.16
+                            tHoA, tHiA = 0.17, 0.44
                         else
-                            tcoR, tcoG, tcoB = 0.15 + b.pp*0.25, 0.45 + b.pp*0.40, 0.90 + b.pp*0.10
-                            tHoA, tHiA = 0.07 + psh*0.04, 0.18
+                            tcoR, tcoG, tcoB = 0.72 + b.pp*0.28, 0.26 + b.pp*0.22, 0.05
+                            tHoA, tHiA = 0.13 + psh*0.05, 0.34
                         end
-                        tHotA = 0.16 + psh*0.07
-                        tSpA = (power >= 5) and (0.08 + psh*0.06) or 0
-                        tSpin = spinSpeed
+                        tHotA = 0.28 + psh*0.10
+                        tSpA = (power >= 5) and (0.10 + psh*0.08) or 0
+                        tBpA = 0.5
+                        tSpin = 3.0
                     else
-                        tScale = 0.88
-                        tcoR, tcoG, tcoB = 0.10, 0.10, 0.25
-                        tHoA, tHiA, tHotA, tSpA = 0.02, 0.02, 0, 0
+                        tScale = 0.80 + sin(t + b.o7) * 0.03
+                        tcoR, tcoG, tcoB = 0.16, 0.11, 0.07
+                        tHoA, tHiA, tHotA, tSpA = 0.03, 0.03, 0, 0
+                        tBpA = 0.32
                         tSpin = 0
                     end
                 else
                     if active then
-                        -- both: per-star ripple; other modes: shared breatheVal
-                        local bv = (mode == "both")
-                            and sin(now * 3.5 + b.o7 * breatheOffset)
-                            or  breatheVal
-                        tScale = baseScale + bv * breatheAmp
+                        tScale = baseScale + sin(t + b.o7) * 0.06
                         tcoR, tcoG, tcoB = fR, fG, fB
-                        tHoA = haloA * (0.75 + psh*0.25)
-                        tHiA = glowA * (0.75 + psh*0.25)
-                        tHotA = 0.22 + psh*0.12 + hotBoost
-                        tSpA = sparkleOn and (0.16 + psh*0.16) or 0
+                        tHoA = haloA * (0.85 + psh*0.15)
+                        tHiA = glowA * (0.85 + psh*0.15)
+                        tHotA = 0.45 + psh*0.15 + hotBoost
+                        tSpA = sparkleOn and (0.18 + psh*0.14) or 0
+                        tBpA = 0.5
                         tSpin = spinSpeed
                     else
-                        tScale = 0.80
-                        tcoR, tcoG, tcoB = coR*0.22, coG*0.22, coB*0.22
+                        tScale = (baseScale * 0.82) + sin(t + b.o7) * 0.03
+                        tcoR, tcoG, tcoB = coR*0.20, coG*0.20, coB*0.20
                         tHoA, tHiA = 0.04, 0.05
                         tHotA, tSpA = 0, 0
-                        tSpin = spinSpeed * 0.30
+                        tBpA = 0.34
+                        tSpin = spinSpeed * 0.4
                     end
                 end
 
                 if active and i == power and self.popImpulse > 0.05 then
-                    tScale = tScale + self.popImpulse * 0.18
+                    tScale = tScale + self.popImpulse * 0.5
                     tHotA = tHotA + self.popImpulse * 0.4
                 end
 
+                -- ease toward targets
                 b.curScale = b.curScale + (tScale - b.curScale) * k
                 b.cR = b.cR + (tcoR - b.cR) * k
                 b.cG = b.cG + (tcoG - b.cG) * k
@@ -459,39 +408,35 @@ function (self, unitId, unitFrame, envTable, modTable)
                 b.hiA = b.hiA + (tHiA - b.hiA) * k
                 b.hotA = b.hotA + (tHotA - b.hotA) * k
                 b.spA = b.spA + (tSpA - b.spA) * k
+                b.bpA = b.bpA + (tBpA - b.bpA) * k
 
                 b.spin = b.spin + dt * tSpin
 
-                -- 4D axis wobble: XY oscillation at irrational (PHI-derived) frequencies
-                local wobX = sin(now * 1.3 + b.zp) * (active and wobAmp or 0)
-                local wobY = sin(now * (1.3 / PHI) + b.zp) * (active and wobAmp * 0.75 or 0)
-                b:ClearAllPoints()
-                b:SetPoint("CENTER", bar, "LEFT", STARTX + (i-1)*STEP + wobX, wobY)
-
                 b:SetScale(b.curScale)
+                b.bp:SetAlpha(b.bpA)
+                b.bp:SetRotation(b.spin * 0.25)
 
                 b.ho:SetVertexColor(self.gR, self.gG, self.gB)
                 b.ho:SetAlpha(b.hoA)
-                b.ho:SetRotation(-b.spin * PHI)
+                b.ho:SetRotation(-b.spin * 0.6)
 
                 b.hi:SetVertexColor(self.gR, self.gG, self.gB)
                 b.hi:SetAlpha(b.hiA)
-                b.hi:SetRotation(b.spin * PHI * PHI)
+                b.hi:SetRotation(b.spin * 0.9)
 
                 b.co:SetVertexColor(b.cR, b.cG, b.cB)
-                b.co:SetAlpha(active and 1 or 0.55)
-                b.co:SetRotation(-b.spin / PHI)
+                b.co:SetAlpha(active and 1 or 0.85)
+                b.co:SetRotation(b.spin * 0.18)
 
-                b.hot:SetVertexColor(hotR, hotG, hotB)
                 b.hot:SetAlpha(b.hotA)
-                b.hot:SetRotation(b.spin * PHI * 3)
+                b.hot:SetRotation(-b.spin * 1.6)
 
                 b.sp:SetAlpha(b.spA)
-                b.sp:SetRotation(-b.spin * PHI * PHI + i * 0.5)
+                b.sp:SetRotation(-b.spin * 1.1 + i * 0.5)
             end
         end)
 
-        bar._ver = VERSION
         _G.BigJ_StarBar_Final = bar
+        print("[StarBar] construction succeeded, bar created.")
     end
 end
