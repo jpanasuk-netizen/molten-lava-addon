@@ -45,6 +45,7 @@ function (self, unitId, unitFrame, envTable, modTable)
 
     -- hoisted math
     local sin, min, max = math.sin, math.min, math.max
+    local PHI = 1.6180339887   -- golden ratio: irrational spin ratios = aperiodic "4D" rotation
 
     local BLOCK = 46
     local STEP  = 62
@@ -74,7 +75,7 @@ function (self, unitId, unitFrame, envTable, modTable)
         bar.lastGenTime = {}           -- per-spellID timestamps for overcap double-fire guard
         bar.wasAtFive = false          -- true when player was at 5 HP last frame (overcap detection)
         -- bar-level smoothed glow color (shared by halos, spine, aura)
-        bar.gR, bar.gG, bar.gB = 1, 0.6, 0.2
+        bar.gR, bar.gG, bar.gB = 0.3, 0.7, 1.0
         bar.auraA = 0.10
 
         --------------------------------------------------------------------
@@ -109,15 +110,6 @@ function (self, unitId, unitFrame, envTable, modTable)
             s.o9 = i * 0.9
             s.pp = i / NUM
             s.zp = i * 1.2566   -- z-axis phase: 2π/5 spread so stars evenly rotate toward/away
-
-            -- black outline (drawn first, slightly oversized, no blend)
-            local ol = s:CreateTexture(nil, "BACKGROUND")
-            ol:SetTexture(STAR_TEX)
-            ol:SetTexCoord(0, 0.25, 0, 0.25)
-            ol:SetSize(BLOCK * 1.22, BLOCK * 1.22)
-            ol:SetPoint("CENTER", s, "CENTER", 0, 0)
-            ol:SetVertexColor(0, 0, 0)
-            ol:SetAlpha(0.85)
 
             -- subtle contrast shadow (fixed size, never resized)
             local bp = s:CreateTexture(nil, "BACKGROUND")
@@ -173,7 +165,7 @@ function (self, unitId, unitFrame, envTable, modTable)
             sp:SetVertexColor(1, 0.95, 0.8)
             sp:SetAlpha(0)
 
-            s.ol, s.bp, s.ho, s.hi, s.co, s.hot, s.sp = ol, bp, ho, hi, co, hot, sp
+            s.bp, s.ho, s.hi, s.co, s.hot, s.sp = bp, ho, hi, co, hot, sp
             s.spin = 0
             s.curScale = 1.0
             s.cR, s.cG, s.cB = 1, 0.5, 0.1
@@ -298,20 +290,20 @@ function (self, unitId, unitFrame, envTable, modTable)
             -- breatheFreq/breatheAmp: slow unified pulse — stars lunge toward viewer together
             local breatheFreq, breatheAmp = 0.65, 0.07
             local breatheOffset = 0   -- phase offset per star (0 = all together, b.o7 = ripple)
-            local coR, coG, coB = 1, 0.5, 0.1
-            local gR, gG, gB = 1, 0.6, 0.2
+            local coR, coG, coB = 0.25, 0.70, 1.0
+            local gR, gG, gB = 0.3, 0.7, 1.0
             local haloA, glowA = 0.08, 0.18
             local spineA, auraA = 0.10, 0.03
             local sparkleOn = false
 
             if inAnshe and hasWings then
-                -- BOTH: maximum everything — this should feel unmistakably special
+                -- BOTH: maximum everything — blue plasma
                 mode = "both"
                 baseScale, spinSpeed = 1.22, 5.5
-                breatheFreq, breatheAmp, breatheOffset = 1.8, 0.20, 0.5  -- ripple lunge across stars
+                breatheFreq, breatheAmp, breatheOffset = 1.8, 0.20, 0.5
                 local p = (sin(now * 9.0) + 1) / 2
-                coR, coG, coB = 1, 0.97*(1-p)+0.80*p, 0.86*(1-p)+0.42*p
-                gR, gG, gB = 1, 0.96, 0.62
+                coR, coG, coB = 0.30*(1-p)+0.60*p, 0.85*(1-p)+0.95*p, 1.0
+                gR, gG, gB = 0.4, 0.9, 1.0
                 haloA, glowA = 0.45, 0.72
                 spineA, auraA = 0.40, 0.16
                 sparkleOn = true
@@ -321,20 +313,19 @@ function (self, unitId, unitFrame, envTable, modTable)
                 baseScale, spinSpeed = 1.10, 3.5
                 breatheFreq, breatheAmp = 0.85, 0.10
                 local p = (sin(now * 7.5) + 1) / 2
-                coR, coG, coB = 1, 0.96*(1-p)+0.55*p, 0.86*(1-p)+0.06*p
-                gR, gG, gB = 1, 0.90, 0.50
+                coR, coG, coB = 0.20*(1-p)+0.50*p, 0.65*(1-p)+0.80*p, 1.0
+                gR, gG, gB = 0.35, 0.78, 1.0
                 haloA, glowA = 0.14, 0.28
                 spineA, auraA = 0.16, 0.05
                 sparkleOn = true
 
             elseif hasWings then
-                -- WINGS: vivid, dramatic, sparkle — clearly different from normal
                 mode = "wings"
                 baseScale, spinSpeed = 1.14, 4.2
                 breatheFreq, breatheAmp = 1.1, 0.13
                 local p = (sin(now * 6.3) + 1) / 2
-                coR, coG, coB = 1, 0.55*(1-p)+0.28*p, 0.16*(1-p)+0.04*p
-                gR, gG, gB = 1, 0.65, 0.22
+                coR, coG, coB = 0.45*(1-p)+0.20*p, 0.72*(1-p)+0.55*p, 1.0
+                gR, gG, gB = 0.3, 0.75, 1.0
                 haloA, glowA = 0.30, 0.52
                 spineA, auraA = 0.30, 0.10
                 sparkleOn = true
@@ -375,10 +366,10 @@ function (self, unitId, unitFrame, envTable, modTable)
                     if active then
                         tScale = baseScale + sin(now * breatheFreq) * breatheAmp
                         if power >= 5 then
-                            tcoR, tcoG, tcoB = 1, 0.60, 0.16
+                            tcoR, tcoG, tcoB = 0.40, 0.85, 1.0
                             tHoA, tHiA = 0.08, 0.20
                         else
-                            tcoR, tcoG, tcoB = 0.72 + b.pp*0.28, 0.26 + b.pp*0.22, 0.05
+                            tcoR, tcoG, tcoB = 0.15 + b.pp*0.25, 0.45 + b.pp*0.40, 0.90 + b.pp*0.10
                             tHoA, tHiA = 0.05 + psh*0.02, 0.14
                         end
                         tHotA = 0.12 + psh*0.05
@@ -429,28 +420,33 @@ function (self, unitId, unitFrame, envTable, modTable)
 
                 b.spin = b.spin + dt * tSpin
 
+                -- 4D axis wobble: XY oscillation at irrational (PHI-derived) frequencies
+                local wobX = sin(now * 1.3 + b.zp) * (active and 4 or 0)
+                local wobY = sin(now * (1.3 / PHI) + b.zp) * (active and 3 or 0)
+                b:ClearAllPoints()
+                b:SetPoint("CENTER", bar, "LEFT", STARTX + (i-1)*STEP + wobX, wobY)
+
                 b:SetScale(b.curScale)
 
                 b.bp:SetAlpha(b.bpA)
-                -- backplate fixed size, barely rotates
 
                 b.ho:SetVertexColor(self.gR, self.gG, self.gB)
                 b.ho:SetAlpha(b.hoA)
-                b.ho:SetRotation(-b.spin * 1.2)    -- outer counter-spin
+                b.ho:SetRotation(-b.spin * PHI)            -- φ ≈ 1.618  (outer counter)
 
                 b.hi:SetVertexColor(self.gR, self.gG, self.gB)
                 b.hi:SetAlpha(b.hiA)
-                b.hi:SetRotation(b.spin * 1.8)     -- inner co-spin faster
+                b.hi:SetRotation(b.spin * PHI * PHI)       -- φ² ≈ 2.618 (inner co-spin)
 
                 b.co:SetVertexColor(b.cR, b.cG, b.cB)
                 b.co:SetAlpha(active and 1 or 0.85)
-                b.co:SetRotation(-b.spin * 0.12)   -- core barely moves (readable)
+                b.co:SetRotation(-b.spin / PHI)            -- 1/φ ≈ 0.618 (core gentle counter)
 
                 b.hot:SetAlpha(b.hotA)
-                b.hot:SetRotation(b.spin * 3.5)    -- hot center screams inward (vortex focal point)
+                b.hot:SetRotation(b.spin * PHI * 3)        -- 3φ ≈ 4.854 (vortex screams)
 
                 b.sp:SetAlpha(b.spA)
-                b.sp:SetRotation(-b.spin * 1.5 + i * 0.5)
+                b.sp:SetRotation(-b.spin * PHI * PHI + i * 0.5)
             end
         end)
 
