@@ -54,8 +54,10 @@ function (self, unitId, unitFrame, envTable, modTable)
     local STARTX = (BAR_W - (NUM - 1) * STEP) / 2
 
     local function HasWings()
-        return (AuraUtil.FindAuraByName("Avenging Wrath", "player") ~= nil)
-            or (AuraUtil.FindAuraByName("Crusade", "player") ~= nil)
+        -- UnitBuff is reliable in TWW; AuraUtil.FindAuraByName silently fails
+        return UnitBuff("player", "Avenging Wrath") ~= nil
+            or UnitBuff("player", "Crusade") ~= nil
+            or UnitBuff("player", "Avenging Crusader") ~= nil
     end
 
     if not _G.BigJ_StarBar_Final then
