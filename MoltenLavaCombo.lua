@@ -100,7 +100,7 @@ function (self, unitId, unitFrame, envTable, modTable)
         --------------------------------------------------------------------
         for i = 1, NUM do
             local s = CreateFrame("Frame", nil, bar)
-            s:SetFrameLevel(bar:GetFrameLevel() + 2)
+            s:SetFrameLevel(bar:GetFrameLevel() + 2 + i)   -- unique level per star, no overlap z-fighting
             s:SetSize(BLOCK, BLOCK)
             s:SetPoint("CENTER", bar, "LEFT", STARTX + (i - 1) * STEP, 0)
 
@@ -166,7 +166,7 @@ function (self, unitId, unitFrame, envTable, modTable)
 
             s.bp, s.ho, s.hi, s.co, s.hot, s.sp = bp, ho, hi, co, hot, sp
             s.spin = 0
-            s.curScale = 1
+            s.zScale = 1.0   -- texture-based depth scale (no frame SetScale = no overlap)
             s.cR, s.cG, s.cB = 1, 0.5, 0.1
             s.hoA, s.hiA, s.hotA, s.spA, s.bpA = 0, 0, 0, 0, 0.45
 
@@ -285,10 +285,10 @@ function (self, unitId, unitFrame, envTable, modTable)
             -- Mode targets. Priority: both > WoA(anshe) > AW(wings) > normal
             ----------------------------------------------------------------
             local mode = "normal"
-            local baseScale, spinSpeed = 1.0, 1.0
-            -- zFreq/zAmp: z-axis depth wave — stars rotate toward/away proportional to mode
-            local zFreq = 0.55 + (power / 5) * 0.25   -- slow in normal, grows with power
-            local zAmp  = 0.10 + (power / 5) * 0.07
+            local baseScale, spinSpeed = 1.0, 1.8
+            -- zFreq/zAmp: texture-based depth wave (no frame overlap) — big amplitude = clear toward/away
+            local zFreq = 0.60 + (power / 5) * 0.30
+            local zAmp  = 0.32 + (power / 5) * 0.10   -- stars shrink to 0.58x / grow to 1.42x
             local coR, coG, coB = 1, 0.5, 0.1
             local gR, gG, gB = 1, 0.6, 0.2
             local haloA, glowA = 0.08, 0.18
@@ -297,8 +297,8 @@ function (self, unitId, unitFrame, envTable, modTable)
 
             if inAnshe and hasWings then
                 mode = "both"
-                baseScale, spinSpeed = 1.78, 2.2
-                zFreq, zAmp = 1.1, 0.22
+                baseScale, spinSpeed = 1.30, 3.5
+                zFreq, zAmp = 1.1, 0.42
                 local p = (sin(now * 9.0) + 1) / 2
                 coR, coG, coB = 1, 0.97*(1-p)+0.80*p, 0.86*(1-p)+0.42*p
                 gR, gG, gB = 1, 0.96, 0.62
@@ -308,8 +308,8 @@ function (self, unitId, unitFrame, envTable, modTable)
 
             elseif inAnshe then
                 mode = "anshe"
-                baseScale, spinSpeed = 1.42, 1.4
-                zFreq, zAmp = 0.80, 0.17
+                baseScale, spinSpeed = 1.15, 2.4
+                zFreq, zAmp = 0.82, 0.38
                 local p = (sin(now * 7.5) + 1) / 2
                 coR, coG, coB = 1, 0.96*(1-p)+0.55*p, 0.86*(1-p)+0.06*p
                 gR, gG, gB = 1, 0.90, 0.50
@@ -319,8 +319,8 @@ function (self, unitId, unitFrame, envTable, modTable)
 
             elseif hasWings then
                 mode = "wings"
-                baseScale, spinSpeed = 1.54, 1.7
-                zFreq, zAmp = 0.92, 0.19
+                baseScale, spinSpeed = 1.20, 2.8
+                zFreq, zAmp = 0.95, 0.40
                 local p = (sin(now * 6.3) + 1) / 2
                 coR, coG, coB = 1, 0.55*(1-p)+0.30*p, 0.18*(1-p)+0.05*p
                 gR, gG, gB = 1, 0.62, 0.20
@@ -328,8 +328,7 @@ function (self, unitId, unitFrame, envTable, modTable)
                 spineA, auraA = 0.18, 0.06
                 sparkleOn = true
             else
-                baseScale = (power >= 5 and 1.50) or (power >= 3 and 1.22) or 0.92
-                baseScale = baseScale + sin(t) * 0.04
+                baseScale = (power >= 5 and 1.10) or (power >= 3 and 1.05) or 1.0
             end
 
             -- gain flash nudges core toward white + brightens hot center
@@ -357,14 +356,13 @@ function (self, unitId, unitFrame, envTable, modTable)
                 local active = i <= power
                 local psh = (sin(t + b.o9) + 1) / 2
 
-                local tScale, tcoR, tcoG, tcoB
+                local tZScale, tcoR, tcoG, tcoB
                 local tHoA, tHiA, tHotA, tSpA, tBpA
                 local tSpin
 
                 if mode == "normal" then
                     if active then
-                        -- z-axis wave: each star at different phase → barrel-roll toward/away illusion
-                        tScale = baseScale + sin(now * zFreq + b.zp) * zAmp
+                        tZScale = baseScale + sin(now * zFreq + b.zp) * zAmp
                         if power >= 5 then
                             tcoR, tcoG, tcoB = 1, 0.60, 0.16
                             tHoA, tHiA = 0.08, 0.20
@@ -377,7 +375,7 @@ function (self, unitId, unitFrame, envTable, modTable)
                         tBpA = 0.5
                         tSpin = spinSpeed
                     else
-                        tScale = 0.80 + sin(t + b.o7) * 0.03
+                        tZScale = 0.72
                         tcoR, tcoG, tcoB = 0.16, 0.11, 0.07
                         tHoA, tHiA, tHotA, tSpA = 0.03, 0.03, 0, 0
                         tBpA = 0.32
@@ -385,7 +383,7 @@ function (self, unitId, unitFrame, envTable, modTable)
                     end
                 else
                     if active then
-                        tScale = baseScale + sin(now * zFreq + b.zp) * zAmp
+                        tZScale = baseScale + sin(now * zFreq + b.zp) * zAmp
                         tcoR, tcoG, tcoB = fR, fG, fB
                         tHoA = haloA * (0.8 + psh*0.2)
                         tHiA = glowA * (0.8 + psh*0.2)
@@ -394,7 +392,7 @@ function (self, unitId, unitFrame, envTable, modTable)
                         tBpA = 0.5
                         tSpin = spinSpeed
                     else
-                        tScale = (baseScale * 0.82) + sin(t + b.o7) * 0.03
+                        tZScale = baseScale * 0.65
                         tcoR, tcoG, tcoB = coR*0.20, coG*0.20, coB*0.20
                         tHoA, tHiA = 0.04, 0.05
                         tHotA, tSpA = 0, 0
@@ -404,12 +402,12 @@ function (self, unitId, unitFrame, envTable, modTable)
                 end
 
                 if active and i == power and self.popImpulse > 0.05 then
-                    tScale = tScale + self.popImpulse * 0.5
+                    tZScale = tZScale + self.popImpulse * 0.20
                     tHotA = tHotA + self.popImpulse * 0.4
                 end
 
                 -- ease toward targets
-                b.curScale = b.curScale + (tScale - b.curScale) * k
+                b.zScale = b.zScale + (tZScale - b.zScale) * k
                 b.cR = b.cR + (tcoR - b.cR) * k
                 b.cG = b.cG + (tcoG - b.cG) * k
                 b.cB = b.cB + (tcoB - b.cB) * k
@@ -421,24 +419,32 @@ function (self, unitId, unitFrame, envTable, modTable)
 
                 b.spin = b.spin + dt * tSpin
 
-                b:SetScale(b.curScale)
+                -- Resize textures for depth (frame fixed at scale 1 = no frame overlap)
+                local sz = b.zScale
+                b.co:SetSize(BLOCK * sz,         BLOCK * sz)
+                b.hot:SetSize(BLOCK * 0.55 * sz, BLOCK * 0.55 * sz)
+                b.ho:SetSize(BLOCK * 1.95 * sz,  BLOCK * 1.95 * sz)
+                b.hi:SetSize(BLOCK * 1.30 * sz,  BLOCK * 1.30 * sz)
+                b.bp:SetSize(BLOCK * 1.45 * sz,  BLOCK * 1.45 * sz)
+                b.sp:SetSize(BLOCK * 1.25 * sz,  BLOCK * 1.25 * sz)
+
                 b.bp:SetAlpha(b.bpA)
-                b.bp:SetRotation(b.spin * 0.08)           -- barely moves (anchor)
+                b.bp:SetRotation(b.spin * 0.08)
 
                 b.ho:SetVertexColor(self.gR, self.gG, self.gB)
                 b.ho:SetAlpha(b.hoA)
-                b.ho:SetRotation(-b.spin * 0.6)           -- slow counter
+                b.ho:SetRotation(-b.spin * 1.0)
 
                 b.hi:SetVertexColor(self.gR, self.gG, self.gB)
                 b.hi:SetAlpha(b.hiA)
-                b.hi:SetRotation(b.spin * 0.8)            -- slow co-rotate
+                b.hi:SetRotation(b.spin * 1.2)
 
                 b.co:SetVertexColor(b.cR, b.cG, b.cB)
                 b.co:SetAlpha(active and 1 or 0.85)
-                b.co:SetRotation(b.spin * 0.18)           -- core barely rotates (readable)
+                b.co:SetRotation(b.spin * 0.22)
 
                 b.hot:SetAlpha(b.hotA)
-                b.hot:SetRotation(-b.spin * 1.4)          -- hot center counter (depth focal point)
+                b.hot:SetRotation(-b.spin * 2.0)
 
                 b.sp:SetAlpha(b.spA)
                 b.sp:SetRotation(-b.spin * 0.9 + i * 0.5)
