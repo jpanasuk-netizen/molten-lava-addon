@@ -288,52 +288,80 @@ function (self, unitId, unitFrame, envTable, modTable)
             ----------------------------------------------------------------
             local mode = "normal"
             local baseScale, spinSpeed = 1.0, 3.2
-            local breatheFreq, breatheAmp = 0.75, 0.09
+            local breatheAmp = 0.09
             local breatheOffset = 0
             local coR, coG, coB = 0.25, 0.70, 1.0
+            local hotR, hotG, hotB = 0.5, 0.8, 1.0   -- hot center color, per mode
             local gR, gG, gB = 0.3, 0.7, 1.0
             local haloA, glowA = 0.12, 0.24
             local spineA, auraA = 0.14, 0.05
             local sparkleOn = false
             local wobAmp = 0
+            local breatheVal = sin(now * 0.75)  -- default smooth, overridden per mode
 
             if inAnshe and hasWings then
+                ----------------------------------------
+                -- BOTH: Holy Ghost — absolute maximum
+                ----------------------------------------
                 mode = "both"
-                baseScale, spinSpeed = 1.32, 8.5
-                breatheFreq, breatheAmp, breatheOffset = 2.8, 0.32, 0.5
-                wobAmp = 13
-                local p = (sin(now * 9.0) + 1) / 2
-                coR, coG, coB = 1.0*(1-p)+0.40*p, 0.12*(1-p)+0.80*p, 0.90
-                gR, gG, gB = 0.9, 0.3, 1.0
-                haloA, glowA = 0.65, 0.92
-                spineA, auraA = 0.60, 0.28
+                baseScale, spinSpeed = 1.36, 11.0
+                breatheAmp, breatheOffset = 0.40, 0.75
+                wobAmp = 18
+                -- color: 14Hz red<->blue cycling with white-hot peaks
+                local p  = (sin(now * 14.0) + 1) / 2
+                local wh = max(0, sin(now * 7.0))   -- white-hot flash every half-cycle
+                coR = 1.0*(1-p) + 0.20*p + wh*0.4
+                coG = 0.05*(1-p) + 0.80*p + wh*0.6
+                coB = 0.80*(1-p) + 1.0*p  + wh*0.4
+                hotR, hotG, hotB = coR, coG*0.5, coB*0.3
+                gR, gG, gB = 1.0, 0.5, 1.0   -- holy white-magenta corona
+                haloA, glowA = 0.78, 1.0
+                spineA, auraA = 0.70, 0.35
                 sparkleOn = true
+                -- per-star ripple computed in loop (breatheVal unused here)
 
             elseif inAnshe then
+                ----------------------------------------
+                -- WoA: Divine Empowerment — slow massive surges
+                ----------------------------------------
                 mode = "anshe"
-                baseScale, spinSpeed = 1.14, 4.4
-                breatheFreq, breatheAmp = 1.0, 0.13
-                wobAmp = 6
-                local p = (sin(now * 7.5) + 1) / 2
-                coR, coG, coB = 0.20*(1-p)+0.50*p, 0.65*(1-p)+0.80*p, 1.0
-                gR, gG, gB = 0.35, 0.78, 1.0
-                haloA, glowA = 0.20, 0.38
-                spineA, auraA = 0.22, 0.08
+                baseScale, spinSpeed = 1.18, 4.8
+                breatheAmp = 0.26   -- huge amplitude — stars visibly SWELL
+                wobAmp = 9
+                -- pure electric blue, vivid
+                local p = (sin(now * 5.5) + 1) / 2
+                coR, coG, coB = 0.05 + p*0.15, 0.60 + p*0.30, 1.0
+                hotR, hotG, hotB = 0.4, 0.95, 1.0
+                gR, gG, gB = 0.20, 0.70, 1.0
+                haloA, glowA = 0.38, 0.58
+                spineA, auraA = 0.35, 0.14
                 sparkleOn = true
+                -- slow majestic surge (0.40 Hz = 2.5 second period)
+                breatheVal = sin(now * 0.40)
 
             elseif hasWings then
+                ----------------------------------------
+                -- AW: Righteous Fury — punchy cubic wrath jabs
+                ----------------------------------------
                 mode = "wings"
-                baseScale, spinSpeed = 1.20, 5.8
-                breatheFreq, breatheAmp = 1.6, 0.19
-                wobAmp = 8
-                local p = (sin(now * 8.0) + 1) / 2
-                coR, coG, coB = 1.0, 0.12*(1-p)+0.22*p, 0.30*(1-p)+0.08*p
-                gR, gG, gB = 0.95, 0.18, 0.30
-                haloA, glowA = 0.42, 0.68
-                spineA, auraA = 0.40, 0.16
+                baseScale, spinSpeed = 1.22, 6.5
+                breatheAmp = 0.24   -- punchy amplitude
+                wobAmp = 10
+                -- blood red, barely any blue
+                local p = (sin(now * 11.0) + 1) / 2
+                coR, coG, coB = 1.0, 0.08 + p*0.12, 0.10 + p*0.08
+                hotR, hotG, hotB = 1.0, 0.25, 0.10
+                gR, gG, gB = 1.0, 0.15, 0.20   -- crimson corona
+                haloA, glowA = 0.50, 0.75
+                spineA, auraA = 0.48, 0.20
                 sparkleOn = true
+                -- CUBIC breathing: hangs near zero then SNAPS to peak = punchy wrath
+                local raw = sin(now * 2.2)
+                breatheVal = raw * raw * raw   -- x³ keeps sign, sharpens peaks
+
             else
                 baseScale = (power >= 5 and 1.10) or (power >= 3 and 1.05) or 1.0
+                breatheVal = sin(now * 0.75)
             end
 
             -- gain flash nudges core toward white + brightens hot center
@@ -367,7 +395,7 @@ function (self, unitId, unitFrame, envTable, modTable)
 
                 if mode == "normal" then
                     if active then
-                        tScale = baseScale + sin(now * breatheFreq) * breatheAmp
+                        tScale = baseScale + breatheVal * breatheAmp
                         if power >= 5 then
                             tcoR, tcoG, tcoB = 0.45, 0.88, 1.0
                             tHoA, tHiA = 0.14, 0.28
@@ -386,19 +414,23 @@ function (self, unitId, unitFrame, envTable, modTable)
                     end
                 else
                     if active then
-                        tScale = baseScale + sin(now * breatheFreq + b.o7 * breatheOffset) * breatheAmp
+                        -- both: per-star ripple; other modes: shared breatheVal
+                        local bv = (mode == "both")
+                            and sin(now * 3.5 + b.o7 * breatheOffset)
+                            or  breatheVal
+                        tScale = baseScale + bv * breatheAmp
                         tcoR, tcoG, tcoB = fR, fG, fB
-                        tHoA = haloA * (0.8 + psh*0.2)
-                        tHiA = glowA * (0.8 + psh*0.2)
-                        tHotA = 0.20 + psh*0.10 + hotBoost
-                        tSpA = sparkleOn and (0.14 + psh*0.14) or 0
+                        tHoA = haloA * (0.75 + psh*0.25)
+                        tHiA = glowA * (0.75 + psh*0.25)
+                        tHotA = 0.22 + psh*0.12 + hotBoost
+                        tSpA = sparkleOn and (0.16 + psh*0.16) or 0
                         tSpin = spinSpeed
                     else
-                        tScale = 0.82
-                        tcoR, tcoG, tcoB = coR*0.20, coG*0.20, coB*0.20
-                        tHoA, tHiA = 0.03, 0.04
+                        tScale = 0.80
+                        tcoR, tcoG, tcoB = coR*0.22, coG*0.22, coB*0.22
+                        tHoA, tHiA = 0.04, 0.05
                         tHotA, tSpA = 0, 0
-                        tSpin = spinSpeed * 0.35
+                        tSpin = spinSpeed * 0.30
                     end
                 end
 
@@ -438,7 +470,7 @@ function (self, unitId, unitFrame, envTable, modTable)
                 b.co:SetAlpha(active and 1 or 0.55)
                 b.co:SetRotation(-b.spin / PHI)
 
-                b.hot:SetVertexColor(b.cR, b.cG * 0.5, b.cB * 0.3)
+                b.hot:SetVertexColor(hotR, hotG, hotB)
                 b.hot:SetAlpha(b.hotA)
                 b.hot:SetRotation(b.spin * PHI * 3)
 
