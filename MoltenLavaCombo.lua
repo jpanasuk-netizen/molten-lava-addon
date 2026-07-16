@@ -27,6 +27,22 @@ function (self, unitId, unitFrame, envTable, modTable)
         [85673]  = true, -- Word of Glory
     }
 
+    local GENERATORS = {
+        [35395]  = true, -- Crusader Strike
+        [406647] = true, -- Crusading Strikes
+        [406648] = true, -- Crusading Strikes (alt)
+        [184575] = true, -- Blade of Justice
+        [20271]  = true, -- Judgment
+        [24275]  = true, -- Hammer of Wrath
+        [255937] = true, -- Wake of Ashes
+        [304971] = true, -- Divine Toll
+        [383385] = true, -- Crusading Strikes (talent)
+    }
+
+    -- Distinct sound for overcap warning (different from the hit-5 bell)
+    local SND_OVERCAP = SOUNDKIT.UI_72_ARTIFACT_FORGE_TRAIT_LOCKED
+                     or SOUNDKIT.IG_QUEST_LOG_OPEN
+
     -- hoisted math
     local sin, min, max = math.sin, math.min, math.max
 
@@ -61,6 +77,8 @@ function (self, unitId, unitFrame, envTable, modTable)
         bar.flash = 0
         bar.hasWings = HasWings()
         bar.currentTarget = nil        -- track target to prevent re-anchor jitter
+        bar.lastGenTime = {}           -- per-spellID timestamps for overcap double-fire guard
+        bar.wasAtFive = false          -- true when player was at 5 HP last frame (overcap detection)
         -- bar-level smoothed glow color (shared by halos, spine, aura)
         bar.gR, bar.gG, bar.gB = 1, 0.6, 0.2
         bar.auraA = 0.10
@@ -185,6 +203,16 @@ function (self, unitId, unitFrame, envTable, modTable)
                     if DEBUG then print("[StarBar] spender", spellID, "-> dawnlights", bar.dawnlightsLeft) end
                 end
             end
+            -- Overcap: generator fired while already at 5 HP (wasted charge)
+            if GENERATORS[spellID] then
+                local last = bar.lastGenTime[spellID] or 0
+                if (now - last) >= 0.4 then
+                    bar.lastGenTime[spellID] = now
+                    if bar.wasAtFive then
+                        SafePlaySound(SND_OVERCAP)
+                    end
+                end
+            end
         end)
 
         --------------------------------------------------------------------
@@ -195,6 +223,9 @@ function (self, unitId, unitFrame, envTable, modTable)
             if self.lastUpdate < 1/30 then return end
             local dt = self.lastUpdate
             self.lastUpdate = 0
+
+            -- Update overcap tracker before any early returns (event handler reads this)
+            self.wasAtFive = (UnitPower("player", HOLY_POWER) or 0) >= 5
 
             local plate = C_NamePlate.GetNamePlateForUnit("target")
             if plate then
@@ -259,16 +290,20 @@ function (self, unitId, unitFrame, envTable, modTable)
             -- Mode targets. Priority: both > WoA(anshe) > AW(wings) > normal
             ----------------------------------------------------------------
             local mode = "normal"
-            local baseScale, spinSpeed = 1.0, 3.0
-            local coR, coG, coB = 1, 0.5, 0.1     -- core color target (mode-level default)
-            local gR, gG, gB = 1, 0.6, 0.2        -- glow color target (bar-level)
-            local haloA, glowA = 0.18, 0.45       -- base alphas for active stars
+            local baseScale, spinSpeed = 1.0, 2.5
+            -- throbFreq/throbAmp: pulse breathes proportional to mode intensity
+            local throbFreq = 1.5 + (power / 5) * 1.5   -- 1.5→3.0 Hz as power builds in normal
+            local throbAmp  = 0.04 + (power / 5) * 0.06
+            local coR, coG, coB = 1, 0.5, 0.1
+            local gR, gG, gB = 1, 0.6, 0.2
+            local haloA, glowA = 0.18, 0.45
             local spineA, auraA = 0.22, 0.06
             local sparkleOn = false
 
             if inAnshe and hasWings then
                 mode = "both"
-                baseScale, spinSpeed = 1.78, 5.2
+                baseScale, spinSpeed = 1.78, 4.8
+                throbFreq, throbAmp = 5.0, 0.18
                 local p = (sin(now * 9.0) + 1) / 2
                 coR, coG, coB = 1, 0.97*(1-p)+0.80*p, 0.86*(1-p)+0.42*p
                 gR, gG, gB = 1, 0.96, 0.62
@@ -278,7 +313,8 @@ function (self, unitId, unitFrame, envTable, modTable)
 
             elseif inAnshe then
                 mode = "anshe"
-                baseScale, spinSpeed = 1.42, 3.6
+                baseScale, spinSpeed = 1.42, 3.0
+                throbFreq, throbAmp = 2.8, 0.10
                 local p = (sin(now * 7.5) + 1) / 2
                 coR, coG, coB = 1, 0.96*(1-p)+0.55*p, 0.86*(1-p)+0.06*p
                 gR, gG, gB = 1, 0.90, 0.50
@@ -288,7 +324,8 @@ function (self, unitId, unitFrame, envTable, modTable)
 
             elseif hasWings then
                 mode = "wings"
-                baseScale, spinSpeed = 1.54, 4.2
+                baseScale, spinSpeed = 1.54, 3.8
+                throbFreq, throbAmp = 3.5, 0.12
                 local p = (sin(now * 6.3) + 1) / 2
                 coR, coG, coB = 1, 0.55*(1-p)+0.30*p, 0.18*(1-p)+0.05*p
                 gR, gG, gB = 1, 0.62, 0.20
@@ -331,7 +368,7 @@ function (self, unitId, unitFrame, envTable, modTable)
 
                 if mode == "normal" then
                     if active then
-                        tScale = baseScale + sin(t + b.o7) * 0.06
+                        tScale = baseScale + sin(t + b.o7) * 0.06 + sin(now * throbFreq + b.o9) * throbAmp
                         if power >= 5 then
                             tcoR, tcoG, tcoB = 1, 0.60, 0.16
                             tHoA, tHiA = 0.22, 0.55
@@ -342,7 +379,7 @@ function (self, unitId, unitFrame, envTable, modTable)
                         tHotA = 0.35 + psh*0.12
                         tSpA = (power >= 5) and (0.12 + psh*0.10) or 0
                         tBpA = 0.5
-                        tSpin = 3.0
+                        tSpin = spinSpeed
                     else
                         tScale = 0.80 + sin(t + b.o7) * 0.03
                         tcoR, tcoG, tcoB = 0.16, 0.11, 0.07
@@ -352,7 +389,7 @@ function (self, unitId, unitFrame, envTable, modTable)
                     end
                 else
                     if active then
-                        tScale = baseScale + sin(t + b.o7) * 0.06
+                        tScale = baseScale + sin(t + b.o7) * 0.06 + sin(now * throbFreq + b.o9) * throbAmp
                         tcoR, tcoG, tcoB = fR, fG, fB
                         tHoA = haloA * (0.85 + psh*0.15)
                         tHiA = glowA * (0.85 + psh*0.15)
@@ -390,25 +427,25 @@ function (self, unitId, unitFrame, envTable, modTable)
 
                 b:SetScale(b.curScale)
                 b.bp:SetAlpha(b.bpA)
-                b.bp:SetRotation(b.spin * 0.25)
+                b.bp:SetRotation(b.spin * 0.12)           -- barely moves (anchor layer)
 
                 b.ho:SetVertexColor(self.gR, self.gG, self.gB)
                 b.ho:SetAlpha(b.hoA)
-                b.ho:SetRotation(-b.spin * 0.6)
+                b.ho:SetRotation(-b.spin * 1.4)           -- counter-spin, medium-fast
 
                 b.hi:SetVertexColor(self.gR, self.gG, self.gB)
                 b.hi:SetAlpha(b.hiA)
-                b.hi:SetRotation(b.spin * 0.9)
+                b.hi:SetRotation(b.spin * 1.8)            -- co-rotate, faster
 
                 b.co:SetVertexColor(b.cR, b.cG, b.cB)
                 b.co:SetAlpha(active and 1 or 0.85)
-                b.co:SetRotation(b.spin * 0.18)
+                b.co:SetRotation(b.spin * 0.18)           -- core stays slow (readable glyph)
 
                 b.hot:SetAlpha(b.hotA)
-                b.hot:SetRotation(-b.spin * 1.6)
+                b.hot:SetRotation(-b.spin * 3.2)          -- hot center flies counter (vortex pull)
 
                 b.sp:SetAlpha(b.spA)
-                b.sp:SetRotation(-b.spin * 1.1 + i * 0.5)
+                b.sp:SetRotation(-b.spin * 1.8 + i * 0.5) -- sparkle counter-sweep
             end
         end)
 

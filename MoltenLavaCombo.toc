@@ -1,7 +1,7 @@
 ## Interface: 110000
 ## Title: Molten Lava Combo UI
 ## Author: jpanasuk-netizen
-## Version: 2.0.1
+## Version: 2.0.2
 ## Description: Holy Power combo UI with magenta and gold animations
 
 MoltenLavaCombo.lua

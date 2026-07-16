@@ -28,6 +28,13 @@ jpanasuk-netizen
 
 ## Release Notes
 
+### v2.0.2 — Vortex Throb + Overcap Warning
+- **Vortex spiral animation**: layered counter-rotations now create a depth "pulling into screen" effect — backplate barely moves, inner halo co-spins fast, hot center counter-spins at 3.2x (the vortex focal point), outer halo counter-spins at 1.4x
+- **Throb system**: stars pulse in/out proportional to mode intensity — Normal scales 1.5→3.0 Hz with power, Wake of Ashes 2.8 Hz, Wings 3.5 Hz, Both 5.0 Hz
+- **Spin speeds tuned**: slightly reduced base speeds so the throb reads cleanly, each mode proportional to its impact
+- **Overcap warning**: plays a distinct sound when a Holy Power generator fires while already at 5 HP (wasted charge)
+- **Double-fire guard**: 0.4s per-spell cooldown prevents the same generator proc from triggering multiple overcap sounds
+
 ### v2.0.1 — Target Re-anchoring Jitter Fix
 - **Fixed**: Nameplate re-anchor jitter when cycling through same target
 - **Improved**: Tracking uses target identity instead of per-frame re-anchoring
