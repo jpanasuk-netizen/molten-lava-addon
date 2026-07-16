@@ -60,6 +60,7 @@ function (self, unitId, unitFrame, envTable, modTable)
         bar.lastDecrement = 0
         bar.flash = 0
         bar.hasWings = HasWings()
+        bar.currentTarget = nil        -- track target to prevent re-anchor jitter
         -- bar-level smoothed glow color (shared by halos, spine, aura)
         bar.gR, bar.gG, bar.gB = 1, 0.6, 0.2
         bar.auraA = 0.10
@@ -197,11 +198,16 @@ function (self, unitId, unitFrame, envTable, modTable)
 
             local plate = C_NamePlate.GetNamePlateForUnit("target")
             if plate then
-                self:ClearAllPoints()
-                self:SetPoint("BOTTOM", plate, "TOP", 0, 18)
+                local currentUnit = plate:GetUnit()
+                if currentUnit ~= self.currentTarget then
+                    self.currentTarget = currentUnit
+                    self:ClearAllPoints()
+                    self:SetPoint("BOTTOM", plate, "TOP", 0, 18)
+                end
                 self:Show()
             else
                 self:Hide()
+                self.currentTarget = nil
                 self.lastPower = -1        -- avoid a fake ding on next target
                 return
             end
