@@ -111,7 +111,7 @@ function (self, unitId, unitFrame, envTable, modTable)
             s.pp = i / NUM
             s.zp = i * 1.2566   -- z-axis phase: 2π/5 spread so stars evenly rotate toward/away
 
-            -- outer halo (star4, ADD, large)
+            -- outer halo (star4, ADD, large glow ring)
             local ho = s:CreateTexture(nil, "BORDER")
             ho:SetTexture(SPARK_TEX)
             ho:SetBlendMode("ADD")
@@ -127,22 +127,23 @@ function (self, unitId, unitFrame, envTable, modTable)
             hi:SetPoint("CENTER", s, "CENTER", 0, 0)
             hi:SetAlpha(0)
 
-            -- core star (star4, normal blend so color shows accurately)
+            -- core star: raid icon atlas (proper 8-point star shape, normal blend so color shows)
             local co = s:CreateTexture(nil, "ARTWORK")
-            co:SetTexture(SPARK_TEX)
+            co:SetTexture(STAR_TEX)
+            co:SetTexCoord(0, 0.25, 0, 0.25)
             co:SetSize(BLOCK, BLOCK)
             co:SetPoint("CENTER", s, "CENTER", 0, 0)
             co:SetVertexColor(0.25, 0.70, 1.0)
 
-            -- hot inner core (star4, ADD, small — color shows unmixed)
+            -- hot inner core (star4 small = glowing dot, ADD so color adds over star)
             local hot = s:CreateTexture(nil, "OVERLAY")
             hot:SetTexture(SPARK_TEX)
             hot:SetBlendMode("ADD")
-            hot:SetSize(BLOCK * 0.70, BLOCK * 0.70)
+            hot:SetSize(BLOCK * 0.65, BLOCK * 0.65)
             hot:SetPoint("CENTER", s, "CENTER", 0, 0)
             hot:SetAlpha(0)
 
-            -- sparkle twinkle (star4, ADD, large)
+            -- sparkle twinkle
             local sp = s:CreateTexture(nil, "OVERLAY")
             sp:SetTexture(SPARK_TEX)
             sp:SetBlendMode("ADD")
@@ -166,7 +167,21 @@ function (self, unitId, unitFrame, envTable, modTable)
         local ef = CreateFrame("Frame")
         ef:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
         ef:RegisterEvent("UNIT_AURA")
+        ef:RegisterEvent("PLAYER_TARGET_CHANGED")
         ef:SetScript("OnEvent", function(_, event, unit, _, spellID)
+            if event == "PLAYER_TARGET_CHANGED" then
+                -- Re-anchor immediately on target change (not waiting for OnUpdate tick)
+                bar.currentTarget = nil
+                local plate = C_NamePlate.GetNamePlateForUnit("target")
+                if plate then
+                    bar:ClearAllPoints()
+                    bar:SetPoint("BOTTOM", plate, "TOP", 0, 18)
+                    bar:Show()
+                else
+                    bar:Hide()
+                end
+                return
+            end
             if event == "UNIT_AURA" then
                 if unit == "player" then
                     bar.hasWings = HasWings()
