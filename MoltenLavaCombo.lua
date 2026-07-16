@@ -46,7 +46,7 @@ function (self, unitId, unitFrame, envTable, modTable)
     -- hoisted math
     local sin, min, max = math.sin, math.min, math.max
 
-    local BLOCK = 40
+    local BLOCK = 46
     local STEP  = 62
     local NUM   = 5
     local BAR_W = 340
@@ -286,6 +286,9 @@ function (self, unitId, unitFrame, envTable, modTable)
             ----------------------------------------------------------------
             local mode = "normal"
             local baseScale, spinSpeed = 1.0, 2.5
+            -- breatheFreq/breatheAmp: slow unified pulse — stars lunge toward viewer together
+            local breatheFreq, breatheAmp = 0.65, 0.07
+            local breatheOffset = 0   -- phase offset per star (0 = all together, b.o7 = ripple)
             local coR, coG, coB = 1, 0.5, 0.1
             local gR, gG, gB = 1, 0.6, 0.2
             local haloA, glowA = 0.08, 0.18
@@ -293,18 +296,21 @@ function (self, unitId, unitFrame, envTable, modTable)
             local sparkleOn = false
 
             if inAnshe and hasWings then
+                -- BOTH: maximum everything — this should feel unmistakably special
                 mode = "both"
-                baseScale, spinSpeed = 1.18, 5.0
+                baseScale, spinSpeed = 1.22, 5.5
+                breatheFreq, breatheAmp, breatheOffset = 1.8, 0.20, 0.5  -- ripple lunge across stars
                 local p = (sin(now * 9.0) + 1) / 2
                 coR, coG, coB = 1, 0.97*(1-p)+0.80*p, 0.86*(1-p)+0.42*p
                 gR, gG, gB = 1, 0.96, 0.62
-                haloA, glowA = 0.20, 0.38
-                spineA, auraA = 0.22, 0.08
+                haloA, glowA = 0.45, 0.72
+                spineA, auraA = 0.40, 0.16
                 sparkleOn = true
 
             elseif inAnshe then
                 mode = "anshe"
                 baseScale, spinSpeed = 1.10, 3.5
+                breatheFreq, breatheAmp = 0.85, 0.10
                 local p = (sin(now * 7.5) + 1) / 2
                 coR, coG, coB = 1, 0.96*(1-p)+0.55*p, 0.86*(1-p)+0.06*p
                 gR, gG, gB = 1, 0.90, 0.50
@@ -313,17 +319,18 @@ function (self, unitId, unitFrame, envTable, modTable)
                 sparkleOn = true
 
             elseif hasWings then
+                -- WINGS: vivid, dramatic, sparkle — clearly different from normal
                 mode = "wings"
-                baseScale, spinSpeed = 1.14, 4.0
+                baseScale, spinSpeed = 1.14, 4.2
+                breatheFreq, breatheAmp = 1.1, 0.13
                 local p = (sin(now * 6.3) + 1) / 2
-                coR, coG, coB = 1, 0.55*(1-p)+0.30*p, 0.18*(1-p)+0.05*p
-                gR, gG, gB = 1, 0.62, 0.20
-                haloA, glowA = 0.16, 0.30
-                spineA, auraA = 0.18, 0.06
+                coR, coG, coB = 1, 0.55*(1-p)+0.28*p, 0.16*(1-p)+0.04*p
+                gR, gG, gB = 1, 0.65, 0.22
+                haloA, glowA = 0.30, 0.52
+                spineA, auraA = 0.30, 0.10
                 sparkleOn = true
             else
                 baseScale = (power >= 5 and 1.08) or (power >= 3 and 1.04) or 1.0
-                baseScale = baseScale + sin(t) * 0.02
             end
 
             -- gain flash nudges core toward white + brightens hot center
@@ -357,7 +364,7 @@ function (self, unitId, unitFrame, envTable, modTable)
 
                 if mode == "normal" then
                     if active then
-                        tScale = baseScale + sin(t + b.o7) * 0.02
+                        tScale = baseScale + sin(now * breatheFreq) * breatheAmp
                         if power >= 5 then
                             tcoR, tcoG, tcoB = 1, 0.60, 0.16
                             tHoA, tHiA = 0.08, 0.20
@@ -378,12 +385,12 @@ function (self, unitId, unitFrame, envTable, modTable)
                     end
                 else
                     if active then
-                        tScale = baseScale + sin(t + b.o7) * 0.02
+                        tScale = baseScale + sin(now * breatheFreq + b.o7 * breatheOffset) * breatheAmp
                         tcoR, tcoG, tcoB = fR, fG, fB
                         tHoA = haloA * (0.8 + psh*0.2)
                         tHiA = glowA * (0.8 + psh*0.2)
                         tHotA = 0.16 + psh*0.08 + hotBoost
-                        tSpA = sparkleOn and (0.06 + psh*0.06) or 0
+                        tSpA = sparkleOn and (0.10 + psh*0.10) or 0
                         tBpA = 0.22
                         tSpin = spinSpeed
                     else
