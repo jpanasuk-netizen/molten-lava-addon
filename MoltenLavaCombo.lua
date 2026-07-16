@@ -111,65 +111,51 @@ function (self, unitId, unitFrame, envTable, modTable)
             s.pp = i / NUM
             s.zp = i * 1.2566   -- z-axis phase: 2π/5 spread so stars evenly rotate toward/away
 
-            -- subtle contrast shadow (fixed size, never resized)
-            local bp = s:CreateTexture(nil, "BACKGROUND")
-            bp:SetTexture(STAR_TEX)
-            bp:SetTexCoord(0, 0.25, 0, 0.25)
-            bp:SetSize(BLOCK * 1.05, BLOCK * 1.05)
-            bp:SetPoint("CENTER", s, "CENTER", 0, 0)
-            bp:SetVertexColor(0.04, 0.03, 0.02)
-            bp:SetAlpha(0.22)
-
-            -- outer halo
+            -- outer halo (star4, ADD, large)
             local ho = s:CreateTexture(nil, "BORDER")
-            ho:SetTexture(STAR_TEX)
-            ho:SetTexCoord(0, 0.25, 0, 0.25)
+            ho:SetTexture(SPARK_TEX)
             ho:SetBlendMode("ADD")
-            ho:SetSize(BLOCK * 1.95, BLOCK * 1.95)
+            ho:SetSize(BLOCK * 2.2, BLOCK * 2.2)
             ho:SetPoint("CENTER", s, "CENTER", 0, 0)
             ho:SetAlpha(0)
 
-            -- inner halo
+            -- inner halo (star4, ADD)
             local hi = s:CreateTexture(nil, "ARTWORK")
-            hi:SetTexture(STAR_TEX)
-            hi:SetTexCoord(0, 0.25, 0, 0.25)
+            hi:SetTexture(SPARK_TEX)
             hi:SetBlendMode("ADD")
-            hi:SetSize(BLOCK * 1.3, BLOCK * 1.3)
+            hi:SetSize(BLOCK * 1.45, BLOCK * 1.45)
             hi:SetPoint("CENTER", s, "CENTER", 0, 0)
             hi:SetAlpha(0)
 
-            -- core star (readable glyph)
+            -- core star (star4, normal blend so color shows accurately)
             local co = s:CreateTexture(nil, "ARTWORK")
-            co:SetTexture(STAR_TEX)
-            co:SetTexCoord(0, 0.25, 0, 0.25)
+            co:SetTexture(SPARK_TEX)
             co:SetSize(BLOCK, BLOCK)
             co:SetPoint("CENTER", s, "CENTER", 0, 0)
-            co:SetVertexColor(1, 0.5, 0.1)
+            co:SetVertexColor(0.25, 0.70, 1.0)
 
-            -- hot inner core
+            -- hot inner core (star4, ADD, small — color shows unmixed)
             local hot = s:CreateTexture(nil, "OVERLAY")
-            hot:SetTexture(STAR_TEX)
-            hot:SetTexCoord(0, 0.25, 0, 0.25)
+            hot:SetTexture(SPARK_TEX)
             hot:SetBlendMode("ADD")
-            hot:SetSize(BLOCK * 0.55, BLOCK * 0.55)
+            hot:SetSize(BLOCK * 0.70, BLOCK * 0.70)
             hot:SetPoint("CENTER", s, "CENTER", 0, 0)
-            hot:SetVertexColor(1, 0.95, 0.65)
             hot:SetAlpha(0)
 
-            -- sparkle twinkle
+            -- sparkle twinkle (star4, ADD, large)
             local sp = s:CreateTexture(nil, "OVERLAY")
             sp:SetTexture(SPARK_TEX)
             sp:SetBlendMode("ADD")
-            sp:SetSize(BLOCK * 1.25, BLOCK * 1.25)
+            sp:SetSize(BLOCK * 1.5, BLOCK * 1.5)
             sp:SetPoint("CENTER", s, "CENTER", 0, 0)
             sp:SetVertexColor(1, 0.95, 0.8)
             sp:SetAlpha(0)
 
-            s.bp, s.ho, s.hi, s.co, s.hot, s.sp = bp, ho, hi, co, hot, sp
+            s.ho, s.hi, s.co, s.hot, s.sp = ho, hi, co, hot, sp
             s.spin = 0
             s.curScale = 1.0
-            s.cR, s.cG, s.cB = 1, 0.5, 0.1
-            s.hoA, s.hiA, s.hotA, s.spA, s.bpA = 0, 0, 0, 0, 0.22
+            s.cR, s.cG, s.cB = 0.25, 0.70, 1.0
+            s.hoA, s.hiA, s.hotA, s.spA = 0, 0, 0, 0
 
             bar.blocks[i] = s
         end
@@ -364,7 +350,7 @@ function (self, unitId, unitFrame, envTable, modTable)
                 local psh = (sin(t + b.o9) + 1) / 2
 
                 local tScale, tcoR, tcoG, tcoB
-                local tHoA, tHiA, tHotA, tSpA, tBpA
+                local tHoA, tHiA, tHotA, tSpA
                 local tSpin
 
                 if mode == "normal" then
@@ -379,13 +365,11 @@ function (self, unitId, unitFrame, envTable, modTable)
                         end
                         tHotA = 0.12 + psh*0.05
                         tSpA = (power >= 5) and (0.05 + psh*0.04) or 0
-                        tBpA = 0.22
                         tSpin = spinSpeed
                     else
                         tScale = 0.88
-                        tcoR, tcoG, tcoB = 0.16, 0.11, 0.07
+                        tcoR, tcoG, tcoB = 0.10, 0.10, 0.25
                         tHoA, tHiA, tHotA, tSpA = 0.02, 0.02, 0, 0
-                        tBpA = 0.14
                         tSpin = 0
                     end
                 else
@@ -396,14 +380,12 @@ function (self, unitId, unitFrame, envTable, modTable)
                         tHiA = glowA * (0.8 + psh*0.2)
                         tHotA = 0.16 + psh*0.08 + hotBoost
                         tSpA = sparkleOn and (0.10 + psh*0.10) or 0
-                        tBpA = 0.22
                         tSpin = spinSpeed
                     else
                         tScale = 0.82
                         tcoR, tcoG, tcoB = coR*0.20, coG*0.20, coB*0.20
                         tHoA, tHiA = 0.03, 0.04
                         tHotA, tSpA = 0, 0
-                        tBpA = 0.14
                         tSpin = spinSpeed * 0.35
                     end
                 end
@@ -421,7 +403,6 @@ function (self, unitId, unitFrame, envTable, modTable)
                 b.hiA = b.hiA + (tHiA - b.hiA) * k
                 b.hotA = b.hotA + (tHotA - b.hotA) * k
                 b.spA = b.spA + (tSpA - b.spA) * k
-                b.bpA = b.bpA + (tBpA - b.bpA) * k
 
                 b.spin = b.spin + dt * tSpin
 
@@ -433,23 +414,21 @@ function (self, unitId, unitFrame, envTable, modTable)
 
                 b:SetScale(b.curScale)
 
-                b.bp:SetAlpha(b.bpA)
-
                 b.ho:SetVertexColor(self.gR, self.gG, self.gB)
                 b.ho:SetAlpha(b.hoA)
-                b.ho:SetRotation(-b.spin * PHI)            -- φ ≈ 1.618  (outer counter)
+                b.ho:SetRotation(-b.spin * PHI)
 
                 b.hi:SetVertexColor(self.gR, self.gG, self.gB)
                 b.hi:SetAlpha(b.hiA)
-                b.hi:SetRotation(b.spin * PHI * PHI)       -- φ² ≈ 2.618 (inner co-spin)
+                b.hi:SetRotation(b.spin * PHI * PHI)
 
                 b.co:SetVertexColor(b.cR, b.cG, b.cB)
-                b.co:SetAlpha(active and 1 or 0.85)
-                b.co:SetRotation(-b.spin / PHI)            -- 1/φ ≈ 0.618 (core gentle counter)
+                b.co:SetAlpha(active and 1 or 0.55)
+                b.co:SetRotation(-b.spin / PHI)
 
-                b.hot:SetVertexColor(b.cR, b.cG * 0.6, b.cB * 0.4)  -- hot core tinted toward core color
+                b.hot:SetVertexColor(b.cR, b.cG * 0.5, b.cB * 0.3)
                 b.hot:SetAlpha(b.hotA)
-                b.hot:SetRotation(b.spin * PHI * 3)        -- 3φ ≈ 4.854 (vortex screams)
+                b.hot:SetRotation(b.spin * PHI * 3)
 
                 b.sp:SetAlpha(b.spA)
                 b.sp:SetRotation(-b.spin * PHI * PHI + i * 0.5)
