@@ -1,64 +1,70 @@
 function (self, unitId, unitFrame, envTable, modTable)
+    -- One-time-build guard
     if _G.BigJ_StarBar_Final then return end
 
-    print("[StarBar VERSION] v14.4 (build 28) -- SUBTLER SOLO STATES + STRONGER COMBO POP: AW, WoA, and 5 HP are calmer; AW+WoA stands out more through depth, color shift, and hot-core emphasis.")
+    print("[StarBar VERSION] v13.1 (build 23) -- PERFORMANCE FIX: Optimized upvalues, cached frame textures, and eliminated redundant table indexing inside high-frequency loops.")
+
+    --------------------------------------------------------------------
+    -- Localize WoW API Globals (Massive speedup for OnUpdate/OnEvent)
+    --------------------------------------------------------------------
+    local GetTime             = _G.GetTime
+    local UnitPower           = _G.UnitPower
+    local GetNamePlateForUnit = _G.C_NamePlate.GetNamePlateForUnit
+    local PlaySound           = _G.PlaySound
+    local UIParent            = _G.UIParent
+    local CreateFrame         = _G.CreateFrame
 
     --------------------------------------------------------------------
     -- Config
     --------------------------------------------------------------------
-    local STAR_TEX   = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
-    local SPARK_TEX  = "Interface\\Cooldown\\star4"
-    local SOLID      = "Interface\\Buttons\\WHITE8X8"
+    local STAR_TEX  = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
+    local SPARK_TEX = "Interface\\Cooldown\\star4"
+    local SOLID     = "Interface\\Buttons\\WHITE8X8"
     local HOLY_POWER = Enum.PowerType.HolyPower
 
-    local DEBUG       = false
-    local SOUND_ON    = true
-    local SOUND_DEBUG = false
-    local SND_FIVE    = 162888
+    local DEBUG    = false      
+    local SOUND_ON = true       
+    local SND_FIVE = 162888
 
     local GENERATORS = {
-        [35395]   = true,
-        [1227637] = true,
-        [20271]   = true,
-        [275779]  = true,
-        [184575]  = true,
-        [24275]   = true,
-        [1241288] = true,
-        [407480]  = true,
-        [198036]  = true,
-        [406647]  = true,
+        [35395]   = true, 
+        [1227637] = true, 
+        [20271]   = true, 
+        [275779]  = true, 
+        [184575]  = true, 
+        [24275]   = true, 
+        [1241288] = true, 
+        [407480]  = true, 
+        [198036]  = true, 
+        [406647]  = true, 
     }
 
-    local WAKE_OF_ASHES           = 255937
-    local AVENGING_WRATH_ID       = 31884
-    local CRUSADE_ID              = 231895
-    local AVENGING_WRATH_DURATION = 20
-    local DAWNLIGHTS_WINDOW       = 12
-
+    local WAKE_OF_ASHES = 255937
+    local AVENGING_WRATH_DURATION = 20   
+    local DAWNLIGHTS_WINDOW = 12          
     local SPENDERS = {
-        [85256]  = true,
-        [336872] = true,
-        [383328] = true,
-        [224239] = true,
-        [215661] = true,
-        [53600]  = true,
-        [85673]  = true,
+        [85256]  = true, 
+        [336872] = true, 
+        [383328] = true, 
+        [224239] = true, 
+        [215661] = true, 
+        [53600]  = true, 
+        [85673]  = true, 
     }
 
+    -- Hoisted math
     local sin, min, max = math.sin, math.min, math.max
-    local GetTime = GetTime
-    local UnitPower = UnitPower
-    local PlaySound = PlaySound
-    local GetPlate = C_NamePlate and C_NamePlate.GetNamePlateForUnit
 
-    local BLOCK  = 40
-    local STEP   = 47
-    local NUM    = 5
-    local BAR_W  = 250
-    local BAR_H  = 70
-    local STARTX = (BAR_W - (NUM - 1) * STEP) / 2
+    local BLOCK = 40
+    local STEP  = 47
+    local NUM   = 5
+    local BAR_W = 250
+    local STARTX = (BAR_W - (NUM - 1) * STEP) * 0.5
 
-    local UPDATE_INTERVAL = 1 / 20
+    local AVENGING_WRATH_ID = 31884
+    local CRUSADE_ID = 231895   
+
+    local SOUND_DEBUG = false   
 
     local function SafePlaySound(kit)
         if SOUND_ON and kit then
@@ -72,10 +78,9 @@ function (self, unitId, unitFrame, envTable, modTable)
     end
 
     local bar = CreateFrame("Frame", "BigJ_StarBar_Final", UIParent)
-    bar:SetSize(BAR_W, BAR_H)
+    bar:SetSize(BAR_W, 70)
     bar:SetFrameStrata("HIGH")
     bar:SetFrameLevel(100)
-
     bar.blocks = {}
     bar.dawnlightsLeft = 0
     bar.dawnlightsExpire = 0
@@ -86,12 +91,8 @@ function (self, unitId, unitFrame, envTable, modTable)
     bar.lastUpdate = 0
     bar.lastDecrement = 0
     bar.flash = 0
-
     bar.gR, bar.gG, bar.gB = 1, 0.6, 0.2
     bar.auraA = 0.10
-
-    bar.lastPlate = nil
-    bar.currentAlpha = -1
 
     bar:Show()
     bar:SetAlpha(0)
@@ -121,13 +122,11 @@ function (self, unitId, unitFrame, envTable, modTable)
         local s = CreateFrame("Frame", nil, bar)
         s:SetFrameLevel(bar:GetFrameLevel() + 2)
         s:SetSize(BLOCK, BLOCK)
-        s.baseX = STARTX + (i - 1) * STEP
-        s:SetPoint("CENTER", bar, "LEFT", s.baseX, 0)
+        s:SetPoint("CENTER", bar, "LEFT", STARTX + (i - 1) * STEP, 0)
 
         s.o7 = i * 0.7
         s.o9 = i * 0.9
         s.pp = i / NUM
-        s.curY = 0
 
         local bp = s:CreateTexture(nil, "BACKGROUND")
         bp:SetTexture(STAR_TEX)
@@ -189,7 +188,7 @@ function (self, unitId, unitFrame, envTable, modTable)
     --------------------------------------------------------------------
     -- Events
     --------------------------------------------------------------------
-    local ef = CreateFrame("Frame", "BigJ_StarBar_EventFrame", UIParent)
+    local ef = CreateFrame("Frame", "BigJ_StarBar_EventFrame")
     ef:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
     ef:SetScript("OnEvent", function(_, event, unit, _, spellID)
         if unit ~= "player" then return end
@@ -210,19 +209,16 @@ function (self, unitId, unitFrame, envTable, modTable)
         if spellID == AVENGING_WRATH_ID or spellID == CRUSADE_ID then
             bar.wingsUntil = now + AVENGING_WRATH_DURATION
             if DEBUG then print("[StarBar] wings armed for", AVENGING_WRATH_DURATION, "sec") end
-
         elseif spellID == WAKE_OF_ASHES then
             bar.dawnlightsLeft = 3
             bar.lastDecrement = now
             bar.dawnlightsExpire = now + DAWNLIGHTS_WINDOW
-
         elseif SPENDERS[spellID] then
             if bar.dawnlightsLeft > 0 and (now - bar.lastDecrement) > 0.5 then
                 bar.dawnlightsLeft = bar.dawnlightsLeft - 1
                 bar.lastDecrement = now
                 if DEBUG then print("[StarBar] spender", spellID, "-> dawnlights", bar.dawnlightsLeft) end
             end
-
         elseif GENERATORS[spellID] then
             bar.pendingGeneratorPing = true
             if DEBUG then print("[StarBar] generator", spellID, "cast -- will check power next tick") end
@@ -234,31 +230,19 @@ function (self, unitId, unitFrame, envTable, modTable)
     --------------------------------------------------------------------
     bar:SetScript("OnUpdate", function(self, elapsed)
         self.lastUpdate = self.lastUpdate + elapsed
-        if self.lastUpdate < UPDATE_INTERVAL then return end
-
+        if self.lastUpdate < 0.03333 then return end -- Cached 1/30
         local dt = self.lastUpdate
         self.lastUpdate = 0
 
-        local plate = GetPlate and GetPlate("target") or nil
-        if not plate then
-            if self.currentAlpha ~= 0 then
-                self.currentAlpha = 0
-                self:SetAlpha(0)
-            end
-            self.lastPlate = nil
-            self.lastPower = -1
-            return
-        end
-
-        if plate ~= self.lastPlate then
-            self.lastPlate = plate
+        local plate = GetNamePlateForUnit("target")
+        if plate then
             self:ClearAllPoints()
             self:SetPoint("BOTTOM", plate, "TOP", 0, 18)
-        end
-
-        if self.currentAlpha ~= 1 then
-            self.currentAlpha = 1
-            self:SetAlpha(1)
+            self:SetAlpha(1)   
+        else
+            self:SetAlpha(0)   
+            self.lastPower = -1        
+            return
         end
 
         local power = UnitPower("player", HOLY_POWER) or 0
@@ -271,6 +255,8 @@ function (self, unitId, unitFrame, envTable, modTable)
                 if DEBUG then print("[StarBar] generator used at cap (power=" .. power .. ") -- ding") end
             end
         end
+
+        local hasWings = self.wingsUntil and (now < self.wingsUntil)
 
         if self.dawnlightsLeft > 0 and self.dawnlightsExpire and now > self.dawnlightsExpire then
             self.dawnlightsLeft = 0
@@ -285,7 +271,6 @@ function (self, unitId, unitFrame, envTable, modTable)
             end
         end
 
-        local hasWings = self.wingsUntil and (now < self.wingsUntil)
         local inAnshe = self.dawnlightsLeft > 0
 
         if DEBUG and (inAnshe or hasWings) then
@@ -293,84 +278,84 @@ function (self, unitId, unitFrame, envTable, modTable)
         end
 
         if power > self.lastPower then
-            self.popImpulse = 0.22
-            self.flash = 0.70
+            self.popImpulse = 0.26
+            self.flash = 0.8
         elseif power < self.lastPower then
-            self.popImpulse = -0.12
+            self.popImpulse = -0.16
         end
         self.lastPower = power
 
-        if self.popImpulse > 0 then
-            self.popImpulse = max(0, self.popImpulse - dt * 7)
-        else
-            self.popImpulse = min(0, self.popImpulse + dt * 7)
-        end
-        self.flash = max(0, self.flash - dt * 3.2)
+        self.popImpulse = self.popImpulse > 0
+            and max(0, self.popImpulse - dt * 8)
+            or  min(0, self.popImpulse + dt * 8)
+        self.flash = max(0, self.flash - dt * 4)
 
         local t = now * 3
-        local k = min(1, dt * 10)
+        local k = min(1, dt * 12)
 
         ----------------------------------------------------------------
         -- Mode targets
         ----------------------------------------------------------------
-        local mode = 0
-        local baseScale = 1.0
-        local spinSpeed = 0
-        local coR, coG, coB = 1, 0.5, 0.1
-        local gR, gG, gB = 1, 0.6, 0.2
-        local haloA, glowA = 0.18, 0.45
+        local mode = "normal"
+        local baseScale, spinSpeed = 1.0, 3.0
+        local coR, coG, coB = 1, 0.5, 0.1     
+        local gR, gG, gB = 1, 0.6, 0.2        
+        local haloA, glowA = 0.18, 0.45       
         local spineA, auraA = 0.22, 0.06
         local sparkleOn = false
 
         if inAnshe and hasWings then
-            mode = 3
-            baseScale, spinSpeed = 1.30, 4.2
-            local p = (sin(now * 7.5) + 1) * 0.5
-            coR, coG, coB = 1, 0.93 * (1 - p) + 0.82 * p, 0.78 * (1 - p) + 0.52 * p
-            gR, gG, gB = 1, 0.90, 0.62
-            haloA, glowA = 0.24, 0.46
-            spineA, auraA = 0.28, 0.08
+            mode = "both"
+            baseScale, spinSpeed = 1.42, 4.2
+            local p = (sin(now * 9.0) + 1) * 0.5
+            coR, coG, coB = 1, 0.97*(1-p)+0.80*p, 0.86*(1-p)+0.42*p
+            gR, gG, gB = 1, 0.96, 0.62
+            haloA, glowA = 0.38, 0.74
+            spineA, auraA = 0.44, 0.16
             sparkleOn = true
 
         elseif inAnshe then
-            mode = 2
-            baseScale, spinSpeed = 1.10, 3.2
-            local p = (sin(now * 6.5) + 1) * 0.5
-            coR, coG, coB = 1, 0.92 * (1 - p) + 0.68 * p, 0.82 * (1 - p) + 0.18 * p
-            gR, gG, gB = 1, 0.86, 0.46
-            haloA, glowA = 0.18, 0.36
-            spineA, auraA = 0.22, 0.05
+            mode = "anshe"
+            baseScale, spinSpeed = 1.14, 2.9
+            local p = (sin(now * 7.5) + 1) * 0.5
+            coR, coG, coB = 1, 0.96*(1-p)+0.55*p, 0.86*(1-p)+0.06*p
+            gR, gG, gB = 1, 0.90, 0.50
+            haloA, glowA = 0.27, 0.59
+            spineA, auraA = 0.32, 0.10
             sparkleOn = true
 
         elseif hasWings then
-            mode = 1
-            baseScale, spinSpeed = 1.16, 3.5
-            local p = (sin(now * 5.7) + 1) * 0.5
-            coR, coG, coB = 1, 0.88 * (1 - p) + 0.95 * p, 0.66 * (1 - p) + 0.76 * p
-            gR, gG, gB = 1, 0.86, 0.58
-            haloA, glowA = 0.20, 0.38
-            spineA, auraA = 0.24, 0.06
+            mode = "wings"
+            baseScale, spinSpeed = 1.28, 3.3
+            local p = (sin(now * 6.3) + 1) * 0.5
+            coR, coG, coB = 1, 0.85*(1-p)+0.95*p, 0.55*(1-p)+0.72*p
+            gR, gG, gB = 1, 0.88, 0.60
+            haloA, glowA = 0.30, 0.58
+            spineA, auraA = 0.36, 0.12
             sparkleOn = true
         else
-            mode = 0
-            baseScale = (power >= 5 and 1.24) or (power >= 3 and 1.10) or 0.92
-            baseScale = baseScale + sin(t) * 0.045
+            baseScale = (power >= 5 and 1.40) or (power >= 3 and 1.16) or 0.90
+            baseScale = baseScale + sin(t) * 0.04
         end
 
-        local flashMix = self.flash * 0.40
-        local fR = coR * (1 - flashMix) + 1 * flashMix
-        local fG = coG * (1 - flashMix) + 0.97 * flashMix
-        local fB = coB * (1 - flashMix) + 0.85 * flashMix
-        local hotBoost = self.flash * 0.35
+        local flashMix = self.flash * 0.45
+        local fR = coR*(1-flashMix) + 1*flashMix
+        local fG = coG*(1-flashMix) + 0.97*flashMix
+        local fB = coB*(1-flashMix) + 0.85*flashMix
+        local hotBoost = self.flash * 0.5
 
         self.gR = self.gR + (gR - self.gR) * k
         self.gG = self.gG + (gG - self.gG) * k
         self.gB = self.gB + (gB - self.gB) * k
         self.auraA = self.auraA + (auraA - self.auraA) * k
+        
+        -- Cache localized colors to save table lookups inside the upcoming loops
+        local self_gR, self_gG, self_gB = self.gR, self.gG, self.gB
+        local popImpulse = self.popImpulse
 
-        self.spine:SetVertexColor(self.gR, self.gG, self.gB)
+        self.spine:SetVertexColor(self_gR, self_gG, self_gB)
         self.spine:SetAlpha(spineA)
-        self.aura:SetVertexColor(self.gR, self.gG, self.gB)
+        self.aura:SetVertexColor(self_gR, self_gG, self_gB)
         self.aura:SetAlpha(self.auraA)
 
         ----------------------------------------------------------------
@@ -380,124 +365,55 @@ function (self, unitId, unitFrame, envTable, modTable)
             local b = self.blocks[i]
             local active = i <= power
             local psh = (sin(t + b.o9) + 1) * 0.5
-            local depth = (sin(t * 1.8 + b.o7) + 1) * 0.5
-            local depthOut = depth * 2 - 1
-
-            local coolMix = depth
-            local coolR, coolG, coolB = 0.40, 0.90, 1.00
-
-            local depthScaleBoost = 0.06
-            local depthHaloBoost  = 0.05
-            local depthGlowBoost  = 0.08
-            local depthHotBoost   = 0.07
-            local depthBackFade   = 0.04
-            local coolCoreMix     = 0.22
-            local coolHaloMix     = 0.18
-            local yAmp            = 2.0
-
-            if mode == 1 then
-                depthScaleBoost = 0.07
-                depthHaloBoost  = 0.05
-                depthGlowBoost  = 0.08
-                depthHotBoost   = 0.08
-                depthBackFade   = 0.04
-                coolCoreMix     = 0.20
-                coolHaloMix     = 0.16
-                yAmp            = 2.2
-            elseif mode == 2 then
-                depthScaleBoost = 0.06
-                depthHaloBoost  = 0.05
-                depthGlowBoost  = 0.08
-                depthHotBoost   = 0.07
-                depthBackFade   = 0.04
-                coolCoreMix     = 0.22
-                coolHaloMix     = 0.18
-                yAmp            = 2.4
-            elseif mode == 3 then
-                depthScaleBoost = 0.11
-                depthHaloBoost  = 0.08
-                depthGlowBoost  = 0.13
-                depthHotBoost   = 0.12
-                depthBackFade   = 0.06
-                coolCoreMix     = 0.34
-                coolHaloMix     = 0.28
-                yAmp            = 4.0
-            end
 
             local tScale, tcoR, tcoG, tcoB
             local tHoA, tHiA, tHotA, tSpA, tBpA
-            local tSpin = 0
-            local targetY = 0
+            local tSpin
 
-            if mode == 0 then
-                if active then
-                    tScale = baseScale + sin(t + b.o7) * 0.04
-                    if power >= 5 then
-                        tcoR, tcoG, tcoB = 1, 0.57, 0.15
-                        tHoA, tHiA = 0.14, 0.34
-                    else
-                        tcoR, tcoG, tcoB = 0.72 + b.pp * 0.28, 0.26 + b.pp * 0.22, 0.05
-                        tHoA, tHiA = 0.11 + psh * 0.04, 0.28
-                    end
-                    tHotA = 0.24 + psh * 0.08
-                    tSpA = (power >= 5) and (0.06 + psh * 0.05) or 0.02
-                    tBpA = 0.50
-                    tSpin = 3.6
-                    targetY = depthOut * yAmp
-                else
-                    tScale = 0.82 + sin(t + b.o7) * 0.03
-                    tcoR, tcoG, tcoB = 0.16, 0.11, 0.07
-                    tHoA, tHiA, tHotA, tSpA = 0.03, 0.03, 0, 0
-                    tBpA = 0.34
-                    tSpin = 0.8
-                    targetY = depthOut * 0.8
-                end
-            else
+            if mode == "normal" then
                 if active then
                     tScale = baseScale + sin(t + b.o7) * 0.05
-                    tcoR, tcoG, tcoB = fR, fG, fB
-                    tHoA = haloA * (0.88 + psh * 0.12)
-                    tHiA = glowA * (0.88 + psh * 0.12)
-                    tHotA = 0.30 + psh * 0.10 + hotBoost
-                    tSpA = sparkleOn and (0.07 + psh * 0.06) or 0
-                    tBpA = 0.48
-                    tSpin = spinSpeed
-                    targetY = depthOut * yAmp
+                    if power >= 5 then
+                        tcoR, tcoG, tcoB = 1, 0.60, 0.16
+                        tHoA, tHiA = 0.17, 0.44
+                    else
+                        tcoR, tcoG, tcoB = 0.72 + b.pp*0.28, 0.26 + b.pp*0.22, 0.05
+                        tHoA, tHiA = 0.13 + psh*0.05, 0.34
+                    end
+                    tHotA = 0.28 + psh*0.10
+                    tSpA = (power >= 5) and (0.10 + psh*0.08) or 0
+                    tBpA = 0.5
+                    tSpin = 3.0
                 else
-                    tScale = (baseScale * 0.86) + sin(t + b.o7) * 0.03
-                    tcoR, tcoG, tcoB = coR * 0.20, coG * 0.20, coB * 0.20
-                    tHoA, tHiA = 0.03, 0.04
+                    tScale = 0.80 + sin(t + b.o7) * 0.03
+                    tcoR, tcoG, tcoB = 0.16, 0.11, 0.07
+                    tHoA, tHiA, tHotA, tSpA = 0.03, 0.03, 0, 0
+                    tBpA = 0.32
+                    tSpin = 0
+                end
+            else
+                if active then
+                    tScale = baseScale + sin(t + b.o7) * 0.06
+                    tcoR, tcoG, tcoB = fR, fG, fB
+                    tHoA = haloA * (0.85 + psh*0.15)
+                    tHiA = glowA * (0.85 + psh*0.15)
+                    tHotA = 0.45 + psh*0.15 + hotBoost
+                    tSpA = sparkleOn and (0.18 + psh*0.14) or 0
+                    tBpA = 0.5
+                    tSpin = spinSpeed
+                else
+                    tScale = (baseScale * 0.82) + sin(t + b.o7) * 0.03
+                    tcoR, tcoG, tcoB = coR*0.20, coG*0.20, coB*0.20
+                    tHoA, tHiA = 0.04, 0.05
                     tHotA, tSpA = 0, 0
                     tBpA = 0.34
-                    tSpin = spinSpeed * 0.30
-                    targetY = depthOut * 0.9
+                    tSpin = spinSpeed * 0.4
                 end
             end
 
-            if active then
-                tScale = tScale + depthOut * depthScaleBoost
-                tHoA = tHoA + depth * depthHaloBoost
-                tHiA = tHiA + depth * depthGlowBoost
-                tHotA = tHotA + depth * depthHotBoost
-                tBpA = tBpA - depth * depthBackFade
-
-                tcoR = tcoR * (1 - coolMix * coolCoreMix) + coolR * (coolMix * coolCoreMix)
-                tcoG = tcoG * (1 - coolMix * coolCoreMix) + coolG * (coolMix * coolCoreMix)
-                tcoB = tcoB * (1 - coolMix * coolCoreMix) + coolB * (coolMix * coolCoreMix)
-            else
-                tScale = tScale + depthOut * 0.02
-                tHoA = tHoA + depth * 0.01
-                tHiA = tHiA + depth * 0.02
-                tBpA = tBpA - depth * 0.01
-            end
-
-            if active and i == power and self.popImpulse > 0.05 then
-                local popScale = (mode == 3) and 0.58 or 0.42
-                local popHot   = (mode == 3) and 0.46 or 0.30
-                local popY     = (mode == 3) and 6.5 or 4.0
-                tScale = tScale + self.popImpulse * popScale
-                tHotA = tHotA + self.popImpulse * popHot
-                targetY = targetY + self.popImpulse * popY
+            if active and i == power and popImpulse > 0.05 then
+                tScale = tScale + popImpulse * 0.5
+                tHotA = tHotA + popImpulse * 0.4
             end
 
             b.curScale = b.curScale + (tScale - b.curScale) * k
@@ -509,43 +425,33 @@ function (self, unitId, unitFrame, envTable, modTable)
             b.hotA = b.hotA + (tHotA - b.hotA) * k
             b.spA = b.spA + (tSpA - b.spA) * k
             b.bpA = b.bpA + (tBpA - b.bpA) * k
-            b.curY = b.curY + (targetY - b.curY) * k
 
             b.spin = b.spin + dt * tSpin
 
-            b:ClearAllPoints()
-            b:SetPoint("CENTER", self, "LEFT", b.baseX, b.curY)
-
-            local hgR = self.gR
-            local hgG = self.gG
-            local hgB = self.gB
-            if active then
-                hgR = self.gR * (1 - coolMix * coolHaloMix) + coolR * (coolMix * coolHaloMix)
-                hgG = self.gG * (1 - coolMix * coolHaloMix) + coolG * (coolMix * coolHaloMix)
-                hgB = self.gB * (1 - coolMix * coolHaloMix) + coolB * (coolMix * coolHaloMix)
-            end
+            -- Cache texture sub-keys to completely bypass nested hash-table lookups 30+ times a second
+            local b_bp, b_ho, b_hi, b_co, b_hot, b_sp = b.bp, b.ho, b.hi, b.co, b.hot, b.sp
 
             b:SetScale(b.curScale)
-            b.bp:SetAlpha(b.bpA)
-            b.bp:SetRotation(b.spin * 0.22)
+            b_bp:SetAlpha(b.bpA)
+            b_bp:SetRotation(b.spin * 0.25)
 
-            b.ho:SetVertexColor(hgR, hgG, hgB)
-            b.ho:SetAlpha(b.hoA)
-            b.ho:SetRotation(-b.spin * 0.58)
+            b_ho:SetVertexColor(self_gR, self_gG, self_gB)
+            b_ho:SetAlpha(b.hoA)
+            b_ho:SetRotation(-b.spin * 0.6)
 
-            b.hi:SetVertexColor(hgR, hgG, hgB)
-            b.hi:SetAlpha(b.hiA)
-            b.hi:SetRotation(b.spin * 0.88)
+            b_hi:SetVertexColor(self_gR, self_gG, self_gB)
+            b_hi:SetAlpha(b.hiA)
+            b_hi:SetRotation(b.spin * 0.9)
 
-            b.co:SetVertexColor(b.cR, b.cG, b.cB)
-            b.co:SetAlpha(active and 1 or 0.85)
-            b.co:SetRotation(b.spin * 0.16)
+            b_co:SetVertexColor(b.cR, b.cG, b.cB)
+            b_co:SetAlpha(active and 1 or 0.85)
+            b_co:SetRotation(b.spin * 0.18)
 
-            b.hot:SetAlpha(b.hotA)
-            b.hot:SetRotation(-b.spin * 1.45)
+            b_hot:SetAlpha(b.hotA)
+            b_hot:SetRotation(-b.spin * 1.6)
 
-            b.sp:SetAlpha(b.spA)
-            b.sp:SetRotation(-b.spin * 1.0 + i * 0.5)
+            b_sp:SetAlpha(b.spA)
+            b_sp:SetRotation(-b.spin * 1.1 + i * 0.5)
         end
     end)
 
